@@ -22,6 +22,36 @@ import type {
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
+/**
+ * Build the full URL for an API call.
+ *
+ * In the browser, `API_URL` can be relative (`/_/backend`) and the
+ * browser resolves it against the current origin. In Node — which is
+ * where Next.js runs Server Components and Route Handlers — `fetch`
+ * rejects relative URLs with `ERR_INVALID_URL`. So when we're not in
+ * the browser, prepend an absolute origin:
+ *
+ * - `VERCEL_URL` is set automatically on every Vercel deployment to
+ *   the deployment's hostname (no protocol). On preview deploys it
+ *   resolves to the preview URL, which is exactly what we want.
+ * - Falls back to `http://localhost:3000` for `next dev`.
+ *
+ * If `API_URL` is already absolute (starts with `http`), it's used
+ * as-is on both sides.
+ */
+function resolveUrl(path: string): string {
+  if (API_URL.startsWith("http")) {
+    return `${API_URL}${path}`;
+  }
+  if (typeof window !== "undefined") {
+    return `${API_URL}${path}`;
+  }
+  const host = process.env.VERCEL_URL
+    ? `https://${process.env.VERCEL_URL}`
+    : "http://localhost:3000";
+  return `${host}${API_URL}${path}`;
+}
+
 export class ApiError extends Error {
   readonly status: number;
   readonly body: unknown;
@@ -41,7 +71,7 @@ export class AmbiguousMatchApiError extends ApiError {
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(`${API_URL}${path}`, {
+  const res = await fetch(resolveUrl(path), {
     ...init,
     headers: {
       "Content-Type": "application/json",
