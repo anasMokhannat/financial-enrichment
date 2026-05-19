@@ -149,8 +149,7 @@ class NBBClient:
                 self._deposit_path.format(reference=reference),
                 headers={"Accept": ACCEPT_PDF},
             )
-        if cached:
-            cached.write_bytes(resp.content)
+        _try_cache_write(cached, resp.content)
         return resp.content
 
     def download_xbrl(self, reference: str) -> Optional[bytes]:
@@ -211,8 +210,7 @@ class NBBClient:
             )
             return None
 
-        if cached:
-            cached.write_bytes(content)
+        _try_cache_write(cached, content)
         return content
 
     def fetch_accounting_json(self, reference: str) -> Optional[dict]:
@@ -254,6 +252,22 @@ class NBBClient:
             return None
         safe = reference.replace("/", "_").replace("\\", "_")
         return self._cache_dir / f"{safe}.{ext}"
+
+
+def _try_cache_write(path: Optional[Path], data: bytes) -> None:
+    """Write *data* to *path* on a best-effort basis.
+
+    The on-disk cache is a speed-up, not a correctness requirement —
+    Supabase is the durable store. Serverless platforms like Vercel
+    only expose ``/tmp`` as writable, so a misconfigured cache dir
+    must not break the request. We log and move on.
+    """
+    if path is None:
+        return
+    try:
+        path.write_bytes(data)
+    except OSError as exc:
+        logger.warning("Skipping cache write at %s (%s)", path, exc)
 
 
 def _digits(num: str) -> str:

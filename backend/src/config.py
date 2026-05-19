@@ -52,4 +52,19 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
-settings.cache_dir.mkdir(parents=True, exist_ok=True)
+
+# Best-effort cache-dir creation. On serverless platforms (Vercel,
+# Lambda) the working directory is read-only and the only writable
+# path is /tmp. Set ``CACHE_DIR=/tmp/.cache`` in those environments;
+# locally the default ``./.cache`` works fine. Failures here are
+# non-fatal — the PDF cache is a speed-up, not a correctness
+# requirement; Supabase is the durable store.
+try:
+    settings.cache_dir.mkdir(parents=True, exist_ok=True)
+except OSError:
+    import logging
+
+    logging.getLogger(__name__).warning(
+        "Could not create cache_dir at %s; running without on-disk cache.",
+        settings.cache_dir,
+    )

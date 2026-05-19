@@ -66,11 +66,19 @@ async def lifespan(app: FastAPI):
     await FastAPICache.clear()
 
 
+# On Vercel monorepo routing the backend lives under /_/backend; the
+# gateway strips that prefix before the request reaches us, so route
+# matching is unchanged — but FastAPI still needs to know the public
+# prefix so the OpenAPI schema and Swagger UI generate the right URLs.
+# In local dev this stays empty.
+_root_path = os.environ.get("FASTAPI_ROOT_PATH", "")
+
 app = FastAPI(
     title="legal-financial-enrichment",
     version="0.1.0",
     summary="Belgian company enrichment: KBO + NBB + LLM extraction.",
     lifespan=lifespan,
+    root_path=_root_path,
 )
 
 app.add_middleware(
