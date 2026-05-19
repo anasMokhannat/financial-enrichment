@@ -19,25 +19,25 @@ import type {
   StatsResponse,
 } from "./types";
 
-const API_URL =
-  process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+// All API calls are now same-origin: the Next.js Route Handlers under
+// `app/api/...` serve them. We keep `NEXT_PUBLIC_API_URL` as an escape
+// hatch for pointing the dashboard at a remote backend during dev, but
+// the default — empty prefix — means "/api/..." on the current origin,
+// which works in both the browser and Node SSR (Node's fetch can
+// resolve a path against an absolute base via VERCEL_URL).
+const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 
 /**
  * Build the full URL for an API call.
  *
- * In the browser, `API_URL` can be relative (`/_/backend`) and the
- * browser resolves it against the current origin. In Node — which is
- * where Next.js runs Server Components and Route Handlers — `fetch`
- * rejects relative URLs with `ERR_INVALID_URL`. So when we're not in
- * the browser, prepend an absolute origin:
- *
- * - `VERCEL_URL` is set automatically on every Vercel deployment to
- *   the deployment's hostname (no protocol). On preview deploys it
- *   resolves to the preview URL, which is exactly what we want.
- * - Falls back to `http://localhost:3000` for `next dev`.
- *
- * If `API_URL` is already absolute (starts with `http`), it's used
- * as-is on both sides.
+ * - In the browser, relative paths resolve against the current origin
+ *   automatically, so `/api/...` just works.
+ * - In Node (Server Components, Route Handlers calling each other,
+ *   `next build` static-render passes), `fetch` rejects relative URLs.
+ *   We prepend the deploy origin from `VERCEL_URL`, or `localhost:3000`
+ *   in `next dev`.
+ * - If `API_URL` is set to an absolute URL, it's used unchanged on
+ *   both sides.
  */
 function resolveUrl(path: string): string {
   if (API_URL.startsWith("http")) {
@@ -116,7 +116,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
 export const api = {
   health(): Promise<HealthResponse> {
-    return request<HealthResponse>("/health");
+    return request<HealthResponse>("/api/health");
   },
 
   /** Resolve a name or CBE to a CompanyFinancialReport. */
@@ -127,7 +127,7 @@ export const api = {
     const params = new URLSearchParams({ q });
     if (opts?.refresh) params.set("refresh", "true");
     if (opts?.filings !== undefined) params.set("filings", String(opts.filings));
-    return request<CompanySearchResponse>(`/companies/search?${params}`);
+    return request<CompanySearchResponse>(`/api/companies/search?${params}`);
   },
 
   /** Fetch a company by CBE (validated server-side). */
@@ -140,7 +140,7 @@ export const api = {
     if (opts?.filings !== undefined) params.set("filings", String(opts.filings));
     const qs = params.toString();
     return request<CompanyFinancialReport>(
-      `/companies/${cbe}${qs ? `?${qs}` : ""}`
+      `/api/companies/${cbe}${qs ? `?${qs}` : ""}`
     );
   },
 
@@ -153,7 +153,7 @@ export const api = {
     if (opts?.filings !== undefined) params.set("filings", String(opts.filings));
     const qs = params.toString();
     return request<CompanyFinancialReport>(
-      `/companies/${cbe}/refresh${qs ? `?${qs}` : ""}`,
+      `/api/companies/${cbe}/refresh${qs ? `?${qs}` : ""}`,
       { method: "POST" }
     );
   },
@@ -163,7 +163,7 @@ export const api = {
     queries: string[],
     opts?: { refresh?: boolean }
   ): Promise<BulkSearchResponse> {
-    return request<BulkSearchResponse>("/companies/bulk", {
+    return request<BulkSearchResponse>("/api/companies/bulk", {
       method: "POST",
       body: JSON.stringify({ queries, refresh: opts?.refresh ?? false }),
     });
@@ -179,23 +179,23 @@ export const api = {
     if (opts?.offset !== undefined) params.set("offset", String(opts.offset));
     const qs = params.toString();
     return request<CompanyListResponse>(
-      `/companies${qs ? `?${qs}` : ""}`
+      `/api/companies${qs ? `?${qs}` : ""}`
     );
   },
 
   /** Aggregate counts powering the Overview tiles. */
   stats(): Promise<StatsResponse> {
-    return request<StatsResponse>("/stats");
+    return request<StatsResponse>("/api/stats");
   },
 
   /** Cached commercial-fit analysis for a company. 404 when not yet generated. */
   getAnalysis(cbe: string): Promise<CommercialAnalysis> {
-    return request<CommercialAnalysis>(`/companies/${cbe}/analysis`);
+    return request<CommercialAnalysis>(`/api/companies/${cbe}/analysis`);
   },
 
   /** Generate a fresh commercial-fit analysis, cache it, return it. */
   generateAnalysis(cbe: string): Promise<CommercialAnalysis> {
-    return request<CommercialAnalysis>(`/companies/${cbe}/analyze`, {
+    return request<CommercialAnalysis>(`/api/companies/${cbe}/analyze`, {
       method: "POST",
     });
   },
