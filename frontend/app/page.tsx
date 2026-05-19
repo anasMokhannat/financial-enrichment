@@ -3,30 +3,40 @@ import { Building2, Clock, FileSpreadsheet } from "lucide-react";
 import { HeroCard } from "@/components/HeroCard";
 import { RecentCompaniesStrip } from "@/components/RecentCompaniesStrip";
 import { StatCard } from "@/components/StatCard";
-import { ApiError, api } from "@/lib/api";
+import { EnrichmentRepository } from "@/lib/server/db/repository";
 import type { StatsResponse } from "@/lib/types";
 
 /**
- * Overview page. Hero banner + three stat tiles fed by the backend's
- * `/stats` endpoint (counts companies and filings stored in Supabase,
- * plus the timestamp of the most recent extraction).
+ * Overview page. Hero banner + three stat tiles fed by Supabase
+ * (companies + filings counts, plus the timestamp of the most recent
+ * extraction). If Supabase isn't configured we render em-dashes and
+ * a hint rather than crashing.
  *
- * If Supabase isn't configured the backend returns 503; we render
- * em-dashes and a hint rather than crashing.
+ * Calls the repository directly rather than the /api/stats route —
+ * skips a same-runtime HTTP round-trip and dodges Vercel Deployment
+ * Protection, which would 401 on SSR fetches to our own deployment.
  */
 export default async function OverviewPage() {
   let stats: StatsResponse | null = null;
   let error: string | null = null;
-  try {
-    stats = await api.stats();
-  } catch (err) {
-    if (err instanceof ApiError && err.status === 503) {
-      error =
-        "Supabase isn't configured — stats are unavailable. See backend/supabase/SETUP.md.";
-    } else if (err instanceof Error) {
-      error = err.message;
-    } else {
-      error = "Unknown error";
+  const repo = EnrichmentRepository.create();
+  if (repo === null) {
+    error =
+      "Supabase isn't configured — stats are unavailable. See frontend/supabase/README.md.";
+  } else {
+    try {
+      const [companies, statements, latest] = await Promise.all([
+        repo.countCompanies(),
+        repo.countStatements(),
+        repo.latestExtractionAt(),
+      ]);
+      stats = {
+        companies_cached: companies,
+        filings_extracted: statements,
+        last_extraction_at: latest,
+      };
+    } catch (err) {
+      error = err instanceof Error ? err.message : "Unknown error";
     }
   }
 

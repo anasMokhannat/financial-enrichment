@@ -3,7 +3,10 @@ import { notFound } from "next/navigation";
 import { CommercialAnalysisPanel } from "@/components/CommercialAnalysisPanel";
 import { CompanyReport } from "@/components/CompanyReport";
 import { RefreshButton } from "@/components/RefreshButton";
-import { ApiError, api } from "@/lib/api";
+import { EnrichmentRepository } from "@/lib/server/db/repository";
+import { tryNormalise } from "@/lib/server/enterpriseNumber";
+import { EnrichmentPipeline } from "@/lib/server/pipeline";
+import { KBOScraperError } from "@/lib/server/errors";
 import type { CompanyFinancialReport } from "@/lib/types";
 
 /**
@@ -11,6 +14,11 @@ import type { CompanyFinancialReport } from "@/lib/types";
  * initial request so the page is shareable. Everything stateful (FY
  * selector, tab switching, charts) lives in the CompanyReport client
  * component mounted below the header.
+ *
+ * NB: this calls the repository / pipeline directly rather than going
+ * through `/api/companies/[cbe]`. Same-runtime function call is faster
+ * than a self-HTTP round-trip and dodges Vercel Deployment Protection,
+ * which would 401 on SSR fetches to our own deployment URL.
  */
 export default async function CompanyPage({
   params,
@@ -18,15 +26,41 @@ export default async function CompanyPage({
   params: Promise<{ cbe: string }>;
 }) {
   const { cbe } = await params;
+  const cbeNorm = tryNormalise(cbe);
+  if (cbeNorm === null) notFound();
 
-  let report: CompanyFinancialReport;
-  try {
-    report = await api.getCompany(cbe);
-  } catch (err) {
-    if (err instanceof ApiError && err.status === 404) notFound();
-    throw err;
+  let report: CompanyFinancialReport | null = null;
+  const repo = EnrichmentRepository.create();
+
+  if (repo !== null) {
+    try {
+      report = await repo.getReport(cbeNorm);
+    } catch (err) {
+      console.warn(`Cache read failed for ${cbeNorm}:`, err);
+    }
   }
 
+  if (report === null || report.statements.length === 0) {
+    let pipelineReport;
+    try {
+      const pipeline = new EnrichmentPipeline();
+      pipelineReport = await pipeline.run(cbeNorm);
+    } catch (err) {
+      if (err instanceof KBOScraperError) notFound();
+      throw err;
+    }
+    report = pipelineReport;
+    if (repo !== null) {
+      try {
+        await repo.saveReport(pipelineReport, "xbrl-chain-v1");
+      } catch (err) {
+        console.warn(`Failed to persist report for ${cbeNorm}:`, err);
+      }
+    }
+  }
+
+  // report is non-null here: either the cache path populated it, or
+  // the pipeline path threw on failure and never reached this line.
   const { company } = report;
 
   return (

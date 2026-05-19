@@ -87,19 +87,30 @@ export type Company = z.infer<typeof Company>;
 
 // ── NBB filings ────────────────────────────────────────────────────────
 
-export const FilingReference = z.object({
-  reference: z.string(),
-  deposit_date: isoDateNullable,
-  exercise_start: isoDateNullable,
-  exercise_end: isoDateNullable,
-  model_type: z.string().nullable(),
-  language: z.string().nullable(),
-  accounting_format: FilingFormat.default("unknown"),
-});
+export const FilingReference = z
+  .object({
+    reference: z.string(),
+    deposit_date: isoDateNullable,
+    exercise_start: isoDateNullable,
+    exercise_end: isoDateNullable,
+    model_type: z.string().nullable(),
+    language: z.string().nullable(),
+    accounting_format: FilingFormat.default("unknown"),
+    // Derived from exercise_end. Supabase doesn't store it; the
+    // pipeline output doesn't carry it. The transform below computes
+    // it on parse so the frontend always sees it on the wire.
+    fiscal_year: z.number().int().nullable().optional(),
+  })
+  .transform((data) => ({
+    ...data,
+    fiscal_year:
+      data.fiscal_year ??
+      (data.exercise_end ? Number(data.exercise_end.slice(0, 4)) : null),
+  }));
 export type FilingReference = z.infer<typeof FilingReference>;
 
 export function fiscalYear(ref: FilingReference): number | null {
-  return ref.exercise_end ? Number(ref.exercise_end.slice(0, 4)) : null;
+  return ref.fiscal_year;
 }
 
 // ── Financial statement ────────────────────────────────────────────────

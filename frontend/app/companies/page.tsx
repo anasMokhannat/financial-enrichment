@@ -1,7 +1,7 @@
 import { Building2, ChevronLeft, ChevronRight, FileText } from "lucide-react";
 import Link from "next/link";
 
-import { ApiError, api } from "@/lib/api";
+import { EnrichmentRepository } from "@/lib/server/db/repository";
 import { cn } from "@/lib/cn";
 import type { CompanyListItem, CompanyListResponse } from "@/lib/types";
 
@@ -9,8 +9,12 @@ const PAGE_SIZE = 50;
 
 /**
  * Companies index. Server-fetched, paginated by query string
- * (`?page=2`). Cache-only — never runs the pipeline. Empty cache
- * renders an inviting empty state pointing the user at search.
+ * (`?page=2`). Cache-only — never runs the pipeline.
+ *
+ * NB: this calls the repository directly rather than going through
+ * `/api/companies`. Same-runtime function call is faster than a
+ * self-HTTP round-trip and dodges Vercel Deployment Protection,
+ * which would 401 on SSR fetches to our own deployment URL.
  */
 export default async function CompaniesPage({
   searchParams,
@@ -23,16 +27,28 @@ export default async function CompaniesPage({
 
   let resp: CompanyListResponse | null = null;
   let error: string | null = null;
-  try {
-    resp = await api.listCompanies({ limit: PAGE_SIZE, offset });
-  } catch (err) {
-    if (err instanceof ApiError && err.status === 503) {
-      error =
-        "Supabase isn't configured. Set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY in backend/.env and restart the API.";
-    } else if (err instanceof Error) {
-      error = err.message;
-    } else {
-      error = "Unknown error";
+  const repo = EnrichmentRepository.create();
+  if (repo === null) {
+    error =
+      "Supabase isn't configured. Set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY in .env.local and restart.";
+  } else {
+    try {
+      const { rows, total } = await repo.listCompanies({ limit: PAGE_SIZE, offset });
+      const enterpriseNumbers = rows.map((r) => r.enterprise_number);
+      const counts = await repo.statementCountsByEnterprise(enterpriseNumbers);
+      const items: CompanyListItem[] = rows.map((r) => ({
+        enterprise_number: r.enterprise_number,
+        name: r.name,
+        trade_name: r.trade_name,
+        legal_form: r.legal_form,
+        status: r.status,
+        dissolution_date: r.dissolution_date,
+        last_refreshed_at: r.last_refreshed_at,
+        statement_count: counts[r.enterprise_number] ?? 0,
+      }));
+      resp = { items, total, limit: PAGE_SIZE, offset };
+    } catch (err) {
+      error = err instanceof Error ? err.message : "Unknown error";
     }
   }
 
