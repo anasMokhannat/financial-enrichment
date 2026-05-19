@@ -1,0 +1,28 @@
+# Core HTTP + parsing
+httpx>=0.27.0
+beautifulsoup4>=4.12.0
+lxml>=5.2.0
+tenacity>=8.3.0
+
+# Models + config
+pydantic>=2.7.0
+pydantic-settings>=2.3.0
+python-dotenv>=1.0.1
+
+# Financial extraction (PDF + LLM)
+pymupdf>=1.24.0
+openai>=1.40.0
+tiktoken>=0.7.0
+
+# Persistence
+# Pin to 2.7.x — supabase 2.8+ pulls a newer storage3 that requires
+# pyiceberg, which needs Rust + Python 3.14 wheels we don't have.
+supabase==2.7.0
+
+# API
+fastapi>=0.115.0
+uvicorn[standard]>=0.30.0
+# Application-level HTTP-tier cache. InMemoryBackend by default (no
+# external service needed). Swap to RedisBackend for multi-instance
+# deployments — see backend/src/api/main.py lifespan.
+fastapi-cache2>=0.2.2
