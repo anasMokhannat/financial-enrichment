@@ -26,3 +26,8 @@ uvicorn[standard]>=0.30.0
 # external service needed). Swap to RedisBackend for multi-instance
 # deployments — see backend/src/api/main.py lifespan.
 fastapi-cache2>=0.2.2
+# fastapi-cache2 imports starlette.templating at module load, which
+# in turn imports jinja2. Starlette declares jinja2 as an optional
+# extra, so it isn't installed by default — on a clean Vercel build
+# the import fails. Pin it here so the lambda can boot.
+jinja2>=3.1.0
