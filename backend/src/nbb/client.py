@@ -71,10 +71,24 @@ class NBBClient:
                 "https://www.nbb.be/en/central-balance-sheet-office/consultation/web-services."
             )
         self._base_url = base_url.rstrip("/")
-        self._cache_dir = cache_dir
         self._deposit_path = deposit_path
+        # Best-effort cache-dir creation. On serverless platforms only
+        # /tmp is writable; on a misconfigured deploy the default `.cache`
+        # path triggers EROFS. Disable the on-disk cache in that case
+        # rather than failing the whole pipeline — Supabase is the
+        # durable store, the PDF cache is just a speed-up.
         if cache_dir:
-            cache_dir.mkdir(parents=True, exist_ok=True)
+            try:
+                cache_dir.mkdir(parents=True, exist_ok=True)
+            except OSError as exc:
+                logger.warning(
+                    "Could not create NBB cache_dir at %s (%s); "
+                    "continuing without on-disk PDF cache.",
+                    cache_dir,
+                    exc,
+                )
+                cache_dir = None
+        self._cache_dir = cache_dir
 
         self._owns_client = client is None
         self._client = client or httpx.Client(
