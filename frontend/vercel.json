@@ -1,11 +1,8 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": "nextjs",
-  "buildCommand": "cd frontend && npm install && npm run build",
-  "installCommand": "echo 'install handled inside buildCommand'",
-  "outputDirectory": "frontend/.next",
   "functions": {
-    "frontend/app/api/**/route.ts": {
+    "app/api/**/route.ts": {
       "maxDuration": 60
     }
   },
