@@ -24,7 +24,7 @@ export type PipelineOptions = {
   onProgress?: ProgressCallback;
 };
 
-const DEFAULT_FILINGS_TO_READ = 2;
+const DEFAULT_FILINGS_TO_READ = 3;
 
 export class EnrichmentPipeline {
   /**

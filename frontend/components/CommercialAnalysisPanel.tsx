@@ -39,8 +39,8 @@ export function CommercialAnalysisPanel({ cbe }: { cbe: string }) {
     (async () => {
       setState({ kind: "loading" });
       try {
-        const a = await api.getAnalysis(cbe);
-        if (!cancelled) setState({ kind: "loaded", analysis: a });
+        const analysis = await api.getAnalysis(cbe);
+        if (!cancelled) setState({ kind: "loaded", analysis: analysis });
       } catch (err) {
         if (cancelled) return;
         if (err instanceof ApiError && err.status === 404) {
@@ -59,8 +59,8 @@ export function CommercialAnalysisPanel({ cbe }: { cbe: string }) {
   async function generate() {
     setState({ kind: "loading" });
     try {
-      const a = await api.generateAnalysis(cbe);
-      setState({ kind: "loaded", analysis: a });
+      const analysis = await api.generateAnalysis(cbe);
+      setState({ kind: "loaded", analysis: analysis });
     } catch (err) {
       const msg =
         err instanceof ApiError
