@@ -14,6 +14,7 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
 import { env, hasSupabase } from "../config";
+import { createLogger } from "../log";
 import {
   CommercialAnalysis,
   Company,
@@ -23,6 +24,8 @@ import {
   type Func,
   type NaceCode,
 } from "../models";
+
+const log = createLogger("db");
 
 let cachedClient: SupabaseClient | null = null;
 
@@ -166,22 +169,24 @@ export class EnrichmentRepository {
     report: CompanyFinancialReport,
     extractor: string,
   ): Promise<void> {
+    const cbe = report.company.enterprise_number;
+    log.info("saveReport start", {
+      cbe,
+      nace: report.company.nace_codes.length,
+      functions: report.company.functions.length,
+      filings: report.filings.length,
+      statements: report.statements.length,
+      extractor,
+    });
+    const t0 = performance.now();
     await this.upsertCompany(report.company);
-    await this.replaceNaceCodes(
-      report.company.enterprise_number,
-      report.company.nace_codes,
-    );
-    await this.replaceFunctions(
-      report.company.enterprise_number,
-      report.company.functions,
-    );
-    await this.upsertFilingReferences(
-      report.company.enterprise_number,
-      report.filings,
-    );
+    await this.replaceNaceCodes(cbe, report.company.nace_codes);
+    await this.replaceFunctions(cbe, report.company.functions);
+    await this.upsertFilingReferences(cbe, report.filings);
     for (const s of report.statements) {
       await this.upsertFinancialStatement(s, extractor);
     }
+    log.info("saveReport ok", { cbe, ms: Math.round(performance.now() - t0) });
   }
 
   // ── Reads ─────────────────────────────────────────────────────────────
@@ -239,12 +244,22 @@ export class EnrichmentRepository {
   async getReport(
     enterpriseNumber: string,
   ): Promise<CompanyFinancialReport | null> {
+    const t0 = performance.now();
     const company = await this.getCompany(enterpriseNumber);
-    if (company === null) return null;
+    if (company === null) {
+      log.info("getReport miss", { cbe: enterpriseNumber });
+      return null;
+    }
     const [filings, statements] = await Promise.all([
       this.getFilings(enterpriseNumber),
       this.getStatements(enterpriseNumber),
     ]);
+    log.info("getReport hit", {
+      cbe: enterpriseNumber,
+      filings: filings.length,
+      statements: statements.length,
+      ms: Math.round(performance.now() - t0),
+    });
     return { company, filings, statements };
   }
 

@@ -12,11 +12,14 @@ import { KBOScraper } from "./kbo/scraper";
 import { NBBClient } from "./nbb/client";
 import { NoFilingsError } from "./errors";
 import { PdfExtractor } from "./extraction/pdf";
+import { createLogger } from "./log";
 import {
   type Company,
   type CompanyFinancialReport,
   type FinancialStatement,
 } from "./models";
+
+const log = createLogger("pipeline");
 
 export type ProgressCallback = (msg: string) => void;
 
@@ -42,18 +45,32 @@ export class EnrichmentPipeline {
     const notify = opts?.onProgress ?? (() => {});
     const nFilings = opts?.filingsToRead ?? DEFAULT_FILINGS_TO_READ;
 
+    log.info("run start", { query, filings: nFilings });
+    const startTotal = performance.now();
+
     notify("Resolving company in KBO");
     const kbo = new KBOScraper();
-    const company: Company = await kbo.lookup(query);
+    const company: Company = await log.time("kbo.lookup", () => kbo.lookup(query));
+    log.info("kbo resolved", {
+      cbe: company.enterprise_number,
+      name: company.name,
+      nace: company.nace_codes.length,
+      functions: company.functions.length,
+    });
 
     notify("Fetching filing references from NBB");
     const nbb = new NBBClient();
-    const references = await nbb.latestReferences(
-      company.enterprise_number,
-      nFilings,
+    const references = await log.time("nbb.latestReferences", () =>
+      nbb.latestReferences(company.enterprise_number, nFilings),
     );
+    log.info("nbb references", {
+      cbe: company.enterprise_number,
+      count: references.length,
+      refs: references.map((r) => r.reference),
+    });
 
     if (references.length === 0) {
+      log.warn("no filings", { cbe: company.enterprise_number });
       throw new NoFilingsError({
         enterprise_number: company.enterprise_number,
         name: company.name,
@@ -68,11 +85,23 @@ export class EnrichmentPipeline {
     for (const ref of references) {
       i++;
       notify(`Extracting filing ${i}/${references.length} (ref ${ref.reference})`);
-      const stmt = await extractor.extract(company.enterprise_number, ref);
-      if (stmt !== null) statements.push(stmt);
+      const stmt = await log.time(`extract ${i}/${references.length} ref=${ref.reference}`, () =>
+        extractor.extract(company.enterprise_number, ref),
+      );
+      if (stmt !== null) {
+        statements.push(stmt);
+      } else {
+        log.warn("extract returned null", { ref: ref.reference });
+      }
     }
 
     notify("Done");
+    log.info("run end", {
+      cbe: company.enterprise_number,
+      filings: references.length,
+      statements: statements.length,
+      ms: Math.round(performance.now() - startTotal),
+    });
     return { company, filings: references, statements };
   }
 }

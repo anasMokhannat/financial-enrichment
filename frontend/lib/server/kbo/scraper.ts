@@ -30,7 +30,10 @@ import {
   normalise as normaliseEnterpriseNumber,
   tryNormalise as tryNormaliseEnterpriseNumber,
 } from "../enterpriseNumber";
+import { createLogger } from "../log";
 import { Company, type Func, type NaceCode } from "../models";
+
+const log = createLogger("kbo");
 
 const KBO_BASE = "https://kbopub.economie.fgov.be/kbopub";
 const SEARCH_BY_NAME = `${KBO_BASE}/zoeknaamfonetischform.html`;
@@ -136,14 +139,17 @@ export class KBOScraper {
 
     const direct = tryNormaliseEnterpriseNumber(q);
     if (direct !== null) {
+      log.info("lookup by cbe", { cbe: direct });
       return this.fetchDetail(direct);
     }
+    log.info("lookup by name", { name: q });
     // Name-based path: the search-results table carries a clean
     // company name in its own cell — much more reliable than the
     // detail-page header, which interleaves the name with metadata
     // ("FLUGIA BV  Name in another language: ..."). Capture the
     // candidate's name and hand it to the detail parser as a hint.
     const { number, name } = await this.resolveByName(q);
+    log.info("name resolved", { name: q, cbe: number, candidateName: name });
     return this.fetchDetail(number, { preferredName: name });
   }
 

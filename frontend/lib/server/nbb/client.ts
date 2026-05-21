@@ -12,7 +12,10 @@
 
 import { NBBClientError, NBBNotFoundError } from "../errors";
 import { env } from "../config";
+import { createLogger } from "../log";
 import { FilingFormat, FilingReference } from "../models";
+
+const log = createLogger("nbb");
 
 const REFERENCES_PATH = "/legalEntity/{cbe}/references";
 
@@ -182,7 +185,7 @@ export class NBBClient {
       );
     } catch (err) {
       if (err instanceof NBBNotFoundError) {
-        console.info(`XBRL not available for ${reference} (NBB returned 404)`);
+        log.info("xbrl not available (404)", { reference });
         return null;
       }
       throw err;
@@ -194,24 +197,24 @@ export class NBBClient {
     const contentType = resp.headers.get("content-type") ?? "";
 
     if (head.startsWith("%PDF")) {
-      console.warn(
-        `NBB ignored the XBRL Accept header for ${reference} and returned ` +
-          `PDF (Content-Type: ${contentType}). Your subscription tier may ` +
-          `not expose XBRL on this endpoint.`,
-      );
+      log.warn("xbrl request returned PDF — tier likely doesn't expose XBRL", {
+        reference,
+        contentType,
+      });
       return null;
     }
 
     const trimmedHead = head.trimStart();
     if (!trimmedHead.startsWith("<") && !head.startsWith("﻿<")) {
-      console.warn(
-        `XBRL response for ${reference} does not look like XML ` +
-          `(first 8 bytes: ${JSON.stringify(head)}, Content-Type: ${contentType}). ` +
-          `Falling through.`,
-      );
+      log.warn("xbrl response not XML", {
+        reference,
+        head: head,
+        contentType,
+      });
       return null;
     }
 
+    log.debug("xbrl downloaded", { reference, bytes: bytes.length });
     return bytes;
   }
 
@@ -233,7 +236,7 @@ export class NBBClient {
       );
     } catch (err) {
       if (err instanceof NBBNotFoundError) {
-        console.info(`PDF not available for ${reference} (NBB returned 404)`);
+        log.info("pdf not available (404)", { reference });
         return null;
       }
       throw err;
@@ -245,14 +248,15 @@ export class NBBClient {
     const contentType = resp.headers.get("content-type") ?? "";
 
     if (!head.startsWith("%PDF")) {
-      console.warn(
-        `PDF response for ${reference} does not look like a PDF ` +
-          `(first 8 bytes: ${JSON.stringify(head)}, Content-Type: ${contentType}). ` +
-          `Falling through.`,
-      );
+      log.warn("pdf response not a PDF", {
+        reference,
+        head: head,
+        contentType,
+      });
       return null;
     }
 
+    log.info("pdf downloaded", { reference, bytes: bytes.length });
     return bytes;
   }
 
@@ -275,6 +279,7 @@ export class NBBClient {
     const delays = [500, 1000];
     let lastErr: unknown;
     for (let attempt = 0; attempt < 3; attempt++) {
+      const started = performance.now();
       try {
         const controller = new AbortController();
         const timeout = setTimeout(() => controller.abort(), this.timeoutMs);
@@ -284,6 +289,8 @@ export class NBBClient {
         } finally {
           clearTimeout(timeout);
         }
+        const ms = Math.round(performance.now() - started);
+        log.debug("http", { path, status: resp.status, attempt: attempt + 1, ms });
         if (resp.status === 404) {
           const body = await resp.text();
           throw new NBBNotFoundError(`NBB API 404 on ${path}: ${body.slice(0, 200)}`);
@@ -300,6 +307,8 @@ export class NBBClient {
         if (err instanceof NBBNotFoundError) throw err;
         if (err instanceof NBBClientError) throw err;
         lastErr = err;
+        const message = err instanceof Error ? err.message : String(err);
+        log.warn("http transient error", { path, attempt: attempt + 1, error: message });
         if (attempt < delays.length) {
           await new Promise(r => setTimeout(r, delays[attempt]));
         }

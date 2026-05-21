@@ -29,9 +29,14 @@ export const env = {
     url: process.env.SUPABASE_URL ?? "",
     serviceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY ?? "",
   },
+  apollo: {
+    apiKey: process.env.APOLLO_API_KEY ?? "",
+    baseUrl: process.env.APOLLO_API_BASE_URL ?? "https://api.apollo.io",
+  },
 } as const;
 
 export const hasNbb = (): boolean => Boolean(env.nbb.subscriptionKey);
 export const hasOpenAI = (): boolean => Boolean(env.openai.apiKey);
 export const hasSupabase = (): boolean =>
   Boolean(env.supabase.url && env.supabase.serviceRoleKey);
+export const hasApollo = (): boolean => Boolean(env.apollo.apiKey);

@@ -1,10 +1,42 @@
 "use client";
 
-import { Briefcase, Copy, Mail, Users } from "lucide-react";
+import {
+  AlertCircle,
+  Briefcase,
+  Check,
+  Copy,
+  ExternalLink,
+  Loader2,
+  Mail,
+  Search,
+  Users,
+} from "lucide-react";
 import { useState } from "react";
 
 import { cn } from "@/lib/cn";
 import type { Company } from "@/lib/types";
+
+/**
+ * Apollo-enrichment response shape (subset). Matches EnrichResult from
+ * lib/server/apollo/client.ts.
+ */
+type EnrichResult = {
+  matched: boolean;
+  email: string | null;
+  name: string | null;
+  first_name: string | null;
+  last_name: string | null;
+  title: string | null;
+  linkedin_url: string | null;
+  photo_url: string | null;
+  organization_name: string | null;
+};
+
+type EnrichState =
+  | { kind: "idle" }
+  | { kind: "loading" }
+  | { kind: "ok"; data: EnrichResult }
+  | { kind: "error"; message: string };
 
 /**
  * Lists the company's directors / officers as outreach prospects.
@@ -63,60 +95,215 @@ function ProspectCard({
   since: string | null;
   companyName: string | null;
 }) {
-  const [copied, setCopied] = useState(false);
+  const [enrich, setEnrich] = useState<EnrichState>({ kind: "idle" });
 
-  async function copyName() {
+  async function findEmail() {
+    setEnrich({ kind: "loading" });
     try {
-      await navigator.clipboard.writeText(name);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
-    } catch {
-      // Clipboard API can be blocked in some browser contexts;
-      // silently no-op rather than crashing the panel.
+      const resp = await fetch("/api/prospects/enrich", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        cache: "no-store",
+        body: JSON.stringify({ name, company_name: companyName }),
+      });
+      const text = await resp.text();
+      let body: unknown = text;
+      try {
+        body = text ? JSON.parse(text) : {};
+      } catch {
+        // non-JSON; keep raw text
+      }
+      if (!resp.ok) {
+        const detail =
+          body && typeof body === "object" && "detail" in (body as Record<string, unknown>)
+            ? String((body as { detail: unknown }).detail)
+            : `Apollo request failed (HTTP ${resp.status})`;
+        setEnrich({ kind: "error", message: detail });
+        return;
+      }
+      setEnrich({ kind: "ok", data: body as EnrichResult });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Network error";
+      setEnrich({ kind: "error", message });
     }
   }
 
-  const linkedinUrl = `https://www.linkedin.com/search/results/people/?keywords=${encodeURIComponent(
-    `${name} ${companyName ?? ""}`.trim(),
-  )}`;
-
   return (
-    <li className="flex items-start gap-3 rounded-xl border border-surface-line bg-surface-sub/40 px-4 py-3 transition hover:border-brand-200 hover:bg-surface">
-      <span className="mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-brand-100 text-brand-700">
-        <Briefcase className="h-4 w-4" />
-      </span>
-      <div className="min-w-0 flex-1">
-        <div className="truncate text-sm font-semibold text-ink">{name}</div>
-        <div className="mt-0.5 truncate text-xs text-ink-subtle">{role}</div>
-        {since && (
-          <div className="mt-1 text-[11px] text-ink-muted">since {since}</div>
-        )}
+    <li className="flex flex-col gap-2 rounded-xl border border-surface-line bg-surface-sub/40 px-4 py-3 transition hover:border-brand-200 hover:bg-surface">
+      <div className="flex items-start gap-3">
+        <span className="mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-brand-100 text-brand-700">
+          <Briefcase className="h-4 w-4" />
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="truncate text-sm font-semibold text-ink">{name}</div>
+          <div className="mt-0.5 truncate text-xs text-ink-subtle">{role}</div>
+          {since && (
+            <div className="mt-1 text-[11px] text-ink-muted">since {since}</div>
+          )}
+        </div>
+        <CopyButton text={name} />
       </div>
-      <div className="flex shrink-0 flex-col items-end gap-1.5">
-        <a
-          href={linkedinUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="inline-flex items-center gap-1 rounded-full bg-brand-500 px-2.5 py-1 text-[11px] font-semibold text-white shadow-card transition hover:bg-brand-600"
-          title="Search this person on LinkedIn"
-        >
-          <Mail className="h-3 w-3" />
-          Find
-        </a>
+
+      {enrich.kind === "idle" && (
         <button
           type="button"
-          onClick={copyName}
-          className={cn(
-            "inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-medium ring-1 transition",
-            copied
-              ? "bg-emerald-50 text-emerald-700 ring-emerald-200"
-              : "bg-surface text-ink-subtle ring-surface-line hover:text-ink",
-          )}
+          onClick={findEmail}
+          className="mt-1 inline-flex w-full items-center justify-center gap-1.5 rounded-full bg-brand-500 px-3 py-1.5 text-[11px] font-semibold text-white shadow-card transition hover:bg-brand-600"
         >
-          <Copy className="h-3 w-3" />
-          {copied ? "Copied" : "Copy"}
+          <Search className="h-3 w-3" />
+          Find email (Apollo)
+        </button>
+      )}
+
+      {enrich.kind === "loading" && (
+        <div className="mt-1 inline-flex items-center justify-center gap-2 rounded-full bg-brand-50 px-3 py-1.5 text-[11px] font-semibold text-brand-700">
+          <Loader2 className="h-3 w-3 animate-spin" />
+          Searching Apollo…
+        </div>
+      )}
+
+      {enrich.kind === "ok" && <EnrichResultView data={enrich.data} retry={findEmail} />}
+
+      {enrich.kind === "error" && (
+        <div className="mt-1 flex items-start gap-2 rounded-lg bg-rose-50 px-3 py-2 text-[11px] text-rose-800 ring-1 ring-rose-200">
+          <AlertCircle className="mt-0.5 h-3 w-3 shrink-0" />
+          <div className="flex-1">
+            <div className="font-semibold">Apollo lookup failed</div>
+            <div className="mt-0.5 leading-snug">{enrich.message}</div>
+          </div>
+          <button
+            type="button"
+            onClick={findEmail}
+            className="shrink-0 rounded-full bg-rose-100 px-2 py-0.5 font-semibold text-rose-800 transition hover:bg-rose-200"
+          >
+            Retry
+          </button>
+        </div>
+      )}
+    </li>
+  );
+}
+
+function EnrichResultView({
+  data,
+  retry,
+}: {
+  data: EnrichResult;
+  retry: () => void;
+}) {
+  if (!data.matched) {
+    return (
+      <div className="mt-1 flex items-start gap-2 rounded-lg bg-amber-50 px-3 py-2 text-[11px] text-amber-800 ring-1 ring-amber-200">
+        <AlertCircle className="mt-0.5 h-3 w-3 shrink-0" />
+        <div className="flex-1">
+          <div className="font-semibold">No Apollo match</div>
+          <div className="mt-0.5 leading-snug">
+            Apollo couldn&apos;t find this person at the given company.
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={retry}
+          className="shrink-0 rounded-full bg-amber-100 px-2 py-0.5 font-semibold text-amber-800 transition hover:bg-amber-200"
+        >
+          Retry
         </button>
       </div>
-    </li>
+    );
+  }
+
+  return (
+    <div className="mt-1 flex flex-col gap-1.5 rounded-lg bg-emerald-50/60 px-3 py-2 ring-1 ring-emerald-200">
+      <div className="flex items-baseline justify-between gap-2 text-[10px] font-semibold uppercase tracking-wider text-emerald-700">
+        <span>Apollo match</span>
+        {data.organization_name && (
+          <span className="truncate font-normal normal-case text-emerald-800/80">
+            @ {data.organization_name}
+          </span>
+        )}
+      </div>
+
+      {data.title && (
+        <div className="text-[11px] text-ink-subtle">{data.title}</div>
+      )}
+
+      {data.email ? (
+        <div className="flex items-center gap-2 rounded-md bg-surface px-2.5 py-1.5 ring-1 ring-surface-line">
+          <Mail className="h-3.5 w-3.5 shrink-0 text-emerald-600" />
+          <a
+            href={`mailto:${data.email}`}
+            className="min-w-0 flex-1 truncate text-xs font-semibold text-ink hover:text-brand-700"
+            title={data.email}
+          >
+            {data.email}
+          </a>
+          <CopyButton text={data.email} compact />
+        </div>
+      ) : (
+        <div className="text-[11px] italic text-ink-muted">
+          No email on file at Apollo.
+        </div>
+      )}
+
+      {data.linkedin_url && (
+        <a
+          href={data.linkedin_url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-1 text-[11px] font-medium text-brand-700 hover:underline"
+        >
+          LinkedIn
+          <ExternalLink className="h-2.5 w-2.5" />
+        </a>
+      )}
+    </div>
+  );
+}
+
+function CopyButton({ text, compact = false }: { text: string; compact?: boolean }) {
+  const [copied, setCopied] = useState(false);
+
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      // Clipboard API can be blocked in some browser contexts.
+    }
+  }
+
+  if (compact) {
+    return (
+      <button
+        type="button"
+        onClick={copy}
+        className={cn(
+          "shrink-0 rounded-md p-1 ring-1 transition",
+          copied
+            ? "bg-emerald-50 text-emerald-700 ring-emerald-200"
+            : "bg-surface-sub text-ink-muted ring-surface-line hover:text-ink",
+        )}
+        title={copied ? "Copied" : "Copy email"}
+      >
+        {copied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+      </button>
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={copy}
+      className={cn(
+        "inline-flex shrink-0 items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-medium ring-1 transition",
+        copied
+          ? "bg-emerald-50 text-emerald-700 ring-emerald-200"
+          : "bg-surface text-ink-subtle ring-surface-line hover:text-ink",
+      )}
+    >
+      {copied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+      {copied ? "Copied" : "Copy"}
+    </button>
   );
 }

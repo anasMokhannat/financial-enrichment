@@ -12,7 +12,10 @@
 import OpenAI from "openai";
 
 import { env, hasOpenAI } from "../config";
+import { createLogger } from "../log";
 import { CommercialAnalysis, type CompanyFinancialReport } from "../models";
+
+const log = createLogger("analyzer");
 
 export class AnalysisUnavailableError extends Error {
   constructor(message: string) {
@@ -212,13 +215,21 @@ export class CommercialAnalyzer {
   }
 
   async analyze(report: CompanyFinancialReport): Promise<CommercialAnalysis> {
+    const cbe = report.company.enterprise_number;
     if (report.statements.length === 0) {
       throw new AnalysisUnavailableError(
-        `No financial statements available for ${report.company.enterprise_number}; cannot analyze.`,
+        `No financial statements available for ${cbe}; cannot analyze.`,
       );
     }
 
     const userPayload = serialiseForPrompt(report);
+    log.info("analyze start", {
+      cbe,
+      model: this.model,
+      statements: report.statements.length,
+      payloadChars: userPayload.length,
+    });
+    const t0 = performance.now();
 
     const response = await this.client.chat.completions.create({
       model: this.model,
@@ -251,8 +262,8 @@ export class CommercialAnalyzer {
       outreach_email_angles?: string[];
     };
 
-    return CommercialAnalysis.parse({
-      enterprise_number: report.company.enterprise_number,
+    const result = CommercialAnalysis.parse({
+      enterprise_number: cbe,
       verdict: payload.verdict,
       summary: payload.summary,
       strengths: payload.strengths ?? [],
@@ -267,6 +278,14 @@ export class CommercialAnalyzer {
       model: this.model,
       generated_at: new Date().toISOString(),
     });
+    log.info("analyze ok", {
+      cbe,
+      verdict: result.verdict,
+      confidence: result.confidence,
+      confidence_score: result.confidence_score,
+      ms: Math.round(performance.now() - t0),
+    });
+    return result;
   }
 }
 

@@ -15,6 +15,9 @@ import {
   NBBNotFoundError,
   NoFilingsError,
 } from "./errors";
+import { createLogger } from "./log";
+
+const log = createLogger("http");
 
 const EXTRACTOR_NAME = "pdf-llm-v1";
 export const extractorName = (): string => EXTRACTOR_NAME;
@@ -39,6 +42,7 @@ export function errorResponse(err: unknown): NextResponse {
   if (err instanceof AmbiguousMatchError) {
     // 409 with structured candidates — frontend has a dedicated
     // AmbiguousMatchApiError that looks for this shape.
+    log.info("ambiguous_match", { candidates: err.candidates.length });
     return NextResponse.json(
       {
         detail: {
@@ -53,19 +57,26 @@ export function errorResponse(err: unknown): NextResponse {
   if (err instanceof KBOScraperError) {
     // KBO returns "not found" via this — surface as 404 so the
     // frontend can render an empty state.
+    log.info("kbo not_found", { message: err.message });
     return fail(404, err.message);
   }
   if (err instanceof NBBNotFoundError) {
+    log.info("nbb not_found", { message: err.message });
     return fail(404, err.message);
   }
   if (err instanceof NoFilingsError) {
+    log.info("no_filings", { cbe: err.company.enterprise_number });
     return fail(404, err.message);
   }
   if (err instanceof NBBClientError) {
     // 502 = upstream is the problem, not our request.
+    log.warn("nbb upstream error", { message: err.message });
     return fail(502, err.message);
   }
   const message = err instanceof Error ? err.message : String(err);
-  console.error("[route handler] unexpected error:", err);
+  log.error("unexpected error", {
+    error: message,
+    stack: err instanceof Error ? err.stack : undefined,
+  });
   return fail(500, message);
 }

@@ -31,12 +31,15 @@ import pdfParse from "pdf-parse/lib/pdf-parse.js";
 
 import { env, hasOpenAI } from "../config";
 import { FinancialExtractionError } from "../errors";
+import { createLogger } from "../log";
 import {
   fiscalYear,
   FilingReference,
   FinancialStatement,
 } from "../models";
 import type { NBBClient } from "../nbb/client";
+
+const log = createLogger("extraction:pdf");
 
 /**
  * Maximum PDF text length sent to the model. ~4 chars/token puts this
@@ -198,39 +201,65 @@ export class PdfExtractor {
       pdfBytes = await this.nbb.downloadPdf(ref.reference);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      console.warn(`PDF download failed for ${ref.reference}: ${msg}`);
+      log.warn("pdf download failed", { reference: ref.reference, error: msg });
       return null;
     }
     if (!pdfBytes) {
-      console.info(`PDF not available for ${ref.reference}; skipping`);
+      log.info("pdf unavailable — skipping", { reference: ref.reference });
       return null;
     }
 
     let text: string;
+    let pages = 0;
     try {
+      const t0 = performance.now();
       // pdf-parse accepts a Buffer in node. Convert from Uint8Array.
       const parsed = await pdfParse(Buffer.from(pdfBytes));
       text = parsed.text ?? "";
+      pages = parsed.numpages ?? 0;
+      log.info("pdf parsed", {
+        reference: ref.reference,
+        pages,
+        chars: text.length,
+        ms: Math.round(performance.now() - t0),
+      });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      console.warn(`pdf-parse failed for ${ref.reference}: ${msg}`);
+      log.warn("pdf-parse failed", { reference: ref.reference, error: msg });
       return null;
     }
     if (!text.trim()) {
-      console.info(`Empty PDF text for ${ref.reference}; skipping`);
+      log.info("pdf text empty — skipping", { reference: ref.reference });
       return null;
     }
 
-    const trimmed = trimToFinancialSection(text, MAX_TEXT_CHARS);
+    const trimResult = trimToFinancialSection(text, MAX_TEXT_CHARS);
+    log.debug("trim", {
+      reference: ref.reference,
+      anchor: trimResult.anchor,
+      from: trimResult.startOffset,
+      length: trimResult.text.length,
+    });
 
     let payload: ModelPayload;
     try {
-      payload = await this.askModel(trimmed);
+      payload = await log.time(`openai.extract ref=${ref.reference}`, () =>
+        this.askModel(trimResult.text),
+      );
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      console.warn(`OpenAI extraction failed for ${ref.reference}: ${msg}`);
+      log.warn("openai extraction failed", { reference: ref.reference, error: msg });
       return null;
     }
+
+    const filled = Object.values(payload).filter((v) => v !== null).length;
+    log.info("statement extracted", {
+      reference: ref.reference,
+      filled,
+      total: 14,
+      revenue: payload.revenue,
+      net_profit: payload.net_profit,
+    });
 
     return FinancialStatement.parse({
       enterprise_number: enterpriseNumber,
@@ -279,22 +308,35 @@ export class PdfExtractor {
   }
 }
 
+type TrimResult = {
+  text: string;
+  startOffset: number;
+  anchor: string | null;
+};
+
 /**
  * Locate the financial-statement section in the PDF text and return a
  * slice no longer than `maxChars`. Belgian filings put boilerplate
  * (identification, attestations) before the numeric sections, so
  * blindly taking the head of the document wastes tokens. We anchor on
  * common section headers and fall back to head-of-doc on no match.
+ *
+ * Returns the slice + the matched anchor (or null) for logging.
  */
-function trimToFinancialSection(full: string, maxChars: number): string {
+function trimToFinancialSection(full: string, maxChars: number): TrimResult {
   let start = 0;
+  let anchor: string | null = null;
   for (const re of SECTION_ANCHORS) {
     const m = full.match(re);
     if (m && m.index !== undefined) {
       start = m.index;
+      anchor = m[0];
       break;
     }
   }
-  const slice = full.slice(start, start + maxChars);
-  return slice;
+  return {
+    text: full.slice(start, start + maxChars),
+    startOffset: start,
+    anchor,
+  };
 }
