@@ -16,7 +16,7 @@ import {
   NoFilingsError,
 } from "./errors";
 
-const EXTRACTOR_NAME = "xbrl-chain-v1";
+const EXTRACTOR_NAME = "pdf-llm-v1";
 export const extractorName = (): string => EXTRACTOR_NAME;
 
 export function ok<T>(body: T, init?: { status?: number }): NextResponse {

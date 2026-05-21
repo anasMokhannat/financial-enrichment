@@ -1,17 +1,17 @@
 /**
  * End-to-end orchestrator: company name -> CBE -> filings -> financials.
  *
- * Port of backend/src/pipeline.py. The XBRL chain is now the only
- * extraction path — when XBRL is absent (older filings, abbreviated
- * schema with no XBRL), the filing is still listed but the statement
- * carries no values. The Python LLM-on-PDF and regex-on-PDF fallbacks
- * are gone, deliberately.
+ * Active extraction path: PDF + OpenAI structured outputs (see
+ * extraction/pdf.ts). For every NBB filing reference we download the
+ * PDF deliverable, run pdf-parse to get the text, and ask OpenAI to
+ * fill the FinancialStatement schema. The XBRL extractor is kept on
+ * disk (extraction/xbrl.ts) but no longer wired into the pipeline.
  */
 
 import { KBOScraper } from "./kbo/scraper";
 import { NBBClient } from "./nbb/client";
 import { NoFilingsError } from "./errors";
-import { XbrlExtractor } from "./extraction/xbrl";
+import { PdfExtractor } from "./extraction/pdf";
 import {
   type Company,
   type CompanyFinancialReport,
@@ -60,8 +60,8 @@ export class EnrichmentPipeline {
       });
     }
 
-    notify(`Extractor: XBRL (chain: ${references.length} filing(s))`);
-    const extractor = new XbrlExtractor(nbb);
+    notify(`Extractor: PDF+LLM (${references.length} filing(s))`);
+    const extractor = new PdfExtractor(nbb);
 
     const statements: FinancialStatement[] = [];
     let i = 0;

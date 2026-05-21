@@ -62,7 +62,7 @@ export default async function CompanyPage({
     report = pipelineReport;
     if (repo !== null) {
       try {
-        await repo.saveReport(pipelineReport, "xbrl-chain-v1");
+        await repo.saveReport(pipelineReport, "pdf-llm-v1");
       } catch (err) {
         console.warn(`Failed to persist report for ${cbeNorm}:`, err);
       }

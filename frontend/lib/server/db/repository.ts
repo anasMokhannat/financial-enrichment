@@ -82,7 +82,23 @@ export class EnrichmentRepository {
       .eq("enterprise_number", enterpriseNumber);
     if (delErr) throw new Error(`replaceNaceCodes delete: ${delErr.message}`);
     if (codes.length === 0) return;
-    const rows = codes.map((c) => ({
+
+    // The unique key on this table is (enterprise_number, code, source,
+    // version). KBO sometimes lists the same NACE entry twice (active
+    // row + historical row with identical code/source/version), which
+    // would violate the constraint within a single insert. Dedupe by
+    // the constraint tuple, keeping the first occurrence — KBO renders
+    // the current entry first, so that's the one we want.
+    const seen = new Set<string>();
+    const deduped: NaceCode[] = [];
+    for (const c of codes) {
+      const key = `${c.code}|${c.source ?? ""}|${c.version ?? ""}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      deduped.push(c);
+    }
+
+    const rows = deduped.map((c) => ({
       ...stripNulls(c),
       enterprise_number: enterpriseNumber,
     }));
@@ -113,10 +129,16 @@ export class EnrichmentRepository {
     refs: FilingReference[],
   ): Promise<void> {
     if (refs.length === 0) return;
-    const rows = refs.map((r) => ({
-      ...stripNulls(r),
-      enterprise_number: enterpriseNumber,
-    }));
+    const rows = refs.map((r) => {
+      // `fiscal_year` is derived from `exercise_end` by the Zod
+      // transform (see models.ts); it's not a column on the table.
+      // Strip it before upsert so PostgREST doesn't reject the row.
+      const { fiscal_year: _fy, ...persisted } = r;
+      return {
+        ...stripNulls(persisted),
+        enterprise_number: enterpriseNumber,
+      };
+    });
     const { error } = await client()
       .from("filing_references")
       .upsert(rows, { onConflict: "reference" });

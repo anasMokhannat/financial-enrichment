@@ -24,6 +24,7 @@ const REFERENCES_PATH = "/legalEntity/{cbe}/references";
  * intent, so we hard-code the vendor form.
  */
 const ACCEPT_XBRL = "application/x.xbrl";
+const ACCEPT_PDF = "application/pdf";
 
 function digitsOnly(s: string): string {
   return s.replace(/\D/g, "");
@@ -205,6 +206,47 @@ export class NBBClient {
     if (!trimmedHead.startsWith("<") && !head.startsWith("﻿<")) {
       console.warn(
         `XBRL response for ${reference} does not look like XML ` +
+          `(first 8 bytes: ${JSON.stringify(head)}, Content-Type: ${contentType}). ` +
+          `Falling through.`,
+      );
+      return null;
+    }
+
+    return bytes;
+  }
+
+  /**
+   * Fetch the PDF bytes for a filing, or null if absent.
+   *
+   * Mirrors {@link downloadXbrl} but requests the PDF representation
+   * from the same content-negotiated deposit endpoint. The first 8
+   * bytes are validated against the `%PDF` magic to catch tier-misconfig
+   * cases (NBB occasionally serves an XBRL or HTML error page even
+   * when PDF is requested).
+   */
+  async downloadPdf(reference: string): Promise<Uint8Array | null> {
+    let resp: Response;
+    try {
+      resp = await this.rawGet(
+        this.depositPath.replace("{reference}", reference),
+        { Accept: ACCEPT_PDF },
+      );
+    } catch (err) {
+      if (err instanceof NBBNotFoundError) {
+        console.info(`PDF not available for ${reference} (NBB returned 404)`);
+        return null;
+      }
+      throw err;
+    }
+
+    const arrayBuf = await resp.arrayBuffer();
+    const bytes = new Uint8Array(arrayBuf);
+    const head = String.fromCharCode(...bytes.slice(0, 8));
+    const contentType = resp.headers.get("content-type") ?? "";
+
+    if (!head.startsWith("%PDF")) {
+      console.warn(
+        `PDF response for ${reference} does not look like a PDF ` +
           `(first 8 bytes: ${JSON.stringify(head)}, Content-Type: ${contentType}). ` +
           `Falling through.`,
       );
