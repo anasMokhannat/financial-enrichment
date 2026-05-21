@@ -57,6 +57,73 @@ export type EnrichResult = {
 };
 
 /**
+ * Common titles / salutations that prefix names. Stripped before
+ * splitting. Case-insensitive, requires trailing whitespace so we don't
+ * eat the start of an actual name (e.g. "Drew" must not lose "Dr").
+ */
+const TITLE_PREFIX_RE =
+  /^(?:mr\.?|mrs\.?|ms\.?|mlle\.?|mme\.?|dr\.?|drs\.?|prof\.?|ir\.?|ing\.?|meneer|mevrouw|monsieur|madame)\s+/i;
+
+/**
+ * Strip noise from a raw KBO name before it goes to Apollo.
+ *
+ * Handles:
+ *   - "VAN DAMME, JEAN-CLAUDE"  → "JEAN-CLAUDE VAN DAMME"
+ *     (Belgian/Anglo "Last, First" format — flip on the first comma)
+ *   - "  Jan  De   Wit  "       → "Jan De Wit"
+ *     (collapse internal whitespace)
+ *   - "Mr. Jan De Wit"          → "Jan De Wit"
+ *     (strip leading title)
+ *   - "Jan De Wit,"             → "Jan De Wit"
+ *     (trim trailing punctuation)
+ *   - "Jan; De Wit"             → "Jan De Wit"
+ *     (replace stray separators with space)
+ *
+ * Apostrophes (`D'Hondt`) and hyphens (`Jean-Claude`) inside names are
+ * preserved.
+ */
+export function cleanName(raw: string): string {
+  let name = (raw ?? "").trim();
+  if (!name) return "";
+
+  // Drop zero-width / BOM chars (U+200B-U+200D, U+FEFF) — KBO
+  // occasionally embeds these in HTML-decoded text.
+  name = name.replace(/[​-‍﻿]/g, "");
+
+  // Collapse internal whitespace before the comma check so multi-space
+  // gaps don't confuse the surname-first detection.
+  name = name.replace(/\s+/g, " ").trim();
+
+  // Strip a leading salutation if present (repeatedly, in case of
+  // pathological "Mr. Dr. Jan").
+  while (TITLE_PREFIX_RE.test(name)) {
+    name = name.replace(TITLE_PREFIX_RE, "");
+  }
+
+  // "LAST, FIRST" → "FIRST LAST". Only flip on the first comma; any
+  // remaining commas (suffixes like ", Jr.") are stripped below.
+  const commaIdx = name.indexOf(",");
+  if (commaIdx > 0) {
+    const left = name.slice(0, commaIdx).trim();
+    const right = name.slice(commaIdx + 1).trim();
+    if (left && right) {
+      name = `${right} ${left}`;
+    }
+  }
+
+  // Replace remaining comma / semicolon / pipe separators with space.
+  name = name.replace(/[,;|]+/g, " ");
+  // Collapse whitespace again after substitutions.
+  name = name.replace(/\s+/g, " ").trim();
+
+  // Trim leading/trailing characters that aren't letters, apostrophes,
+  // or hyphens. Preserves intra-name punctuation like "D'Hondt".
+  name = name.replace(/^[^\p{L}'-]+|[^\p{L}'-]+$/gu, "");
+
+  return name;
+}
+
+/**
  * Split a full name into first / last components.
  *
  * Heuristic: first whitespace-separated token is the first name, the
@@ -64,12 +131,15 @@ export type EnrichResult = {
  * "FIRSTNAME LASTNAME" or "FIRSTNAME VAN DEN LASTNAME" — both work
  * with this split because Apollo treats compound surnames as a single
  * `last_name` field.
+ *
+ * Runs `cleanName` first so stray commas / titles / whitespace from
+ * the KBO scrape don't reach Apollo.
  */
 export function splitName(full: string): {
   firstName: string;
   lastName: string;
 } {
-  const cleaned = full.trim().replace(/\s+/g, " ");
+  const cleaned = cleanName(full);
   if (!cleaned) return { firstName: "", lastName: "" };
   const idx = cleaned.indexOf(" ");
   if (idx === -1) return { firstName: cleaned, lastName: "" };
