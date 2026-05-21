@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 
 import { CommercialAnalysisPanel } from "@/components/CommercialAnalysisPanel";
 import { CompanyReport } from "@/components/CompanyReport";
+import { GroupStructure } from "@/components/GroupStructure";
 import { NoFilingsCard } from "@/components/NoFilingsCard";
 import { Prospects } from "@/components/Prospects";
 import { RefreshButton } from "@/components/RefreshButton";
@@ -104,6 +105,8 @@ export default async function CompanyPage({
       </header>
 
       <Prospects company={company} />
+
+      <GroupStructure cbe={company.enterprise_number} />
 
       <CommercialAnalysisPanel cbe={company.enterprise_number} />
 

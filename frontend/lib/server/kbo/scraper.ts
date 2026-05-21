@@ -31,7 +31,12 @@ import {
   tryNormalise as tryNormaliseEnterpriseNumber,
 } from "../enterpriseNumber";
 import { createLogger } from "../log";
-import { Company, type Func, type NaceCode } from "../models";
+import {
+  Company,
+  type CorporateMandate,
+  type Func,
+  type NaceCode,
+} from "../models";
 
 const log = createLogger("kbo");
 
@@ -341,6 +346,7 @@ export class KBOScraper {
       vat_subject: vatSubject,
       nace_codes: sections.nace,
       functions: sections.functions,
+      corporate_mandates: sections.mandates,
     });
   }
 
@@ -357,12 +363,14 @@ export class KBOScraper {
     authorisations: string[];
     nace: NaceCode[];
     functions: Func[];
+    mandates: CorporateMandate[];
   } {
     const general = new Map<string, string>();
     const characteristics: string[] = [];
     const authorisations: string[] = [];
     const nace: NaceCode[] = [];
     const functions: Func[] = [];
+    const mandates: CorporateMandate[] = [];
 
     let current: Section = "other";
     let naceSource: string | null = null;
@@ -397,15 +405,25 @@ export class KBOScraper {
         const code = parseNaceRow(text, naceSource, naceVersion);
         if (code !== null) nace.push(code);
       } else if (current === "functions") {
-        const func = parseFunctionRow(
+        const parsed = parseFunctionRow(
           cells.map((c) => cellText($, c)),
           text,
         );
-        if (func !== null) functions.push(func);
+        if (parsed !== null) {
+          if (parsed.kind === "person") functions.push(parsed.value);
+          else mandates.push(parsed.value);
+        }
       }
     });
 
-    return { general, characteristics, authorisations, nace, functions };
+    return {
+      general,
+      characteristics,
+      authorisations,
+      nace,
+      functions,
+      mandates,
+    };
   }
 
   private async getText(url: string): Promise<string> {
@@ -498,7 +516,23 @@ function parseNaceRow(
   };
 }
 
-function parseFunctionRow(cellTexts: string[], rowText: string): Func | null {
+type ParsedFunctionRow =
+  | { kind: "person"; value: Func }
+  | { kind: "corporate"; value: CorporateMandate };
+
+/**
+ * Parse one row of the KBO "Functions" section.
+ *
+ * Returns a discriminated union so the caller can route natural persons
+ * (used as outreach prospects) and corporate mandates (used for the
+ * group-structure graph) into separate buckets. The presence of a CBE
+ * number on the row is the deterministic signal that the holder is a
+ * legal entity, not a person.
+ */
+function parseFunctionRow(
+  cellTexts: string[],
+  rowText: string,
+): ParsedFunctionRow | null {
   let text = rowText.trim();
   if (!text) return null;
 
@@ -530,22 +564,31 @@ function parseFunctionRow(cellTexts: string[], rowText: string): Func | null {
     holderName = text || null;
   }
 
-  if (!role && !holderName) return null;
+  if (!role && !holderName && !holderEnterpriseNumber) return null;
 
-  // Drop corporate directors. KBO lists two kinds of function holders:
-  // natural persons (e.g. "Jan De Wit") and legal entities (e.g.
-  // "MANAGEMENT-CO BV  0123.456.789"). The presence of a CBE number on
-  // the row is the deterministic signal that the holder is a company,
-  // not a person — only people are usable as prospects, so we skip
-  // those rows entirely at the extraction layer.
-  if (holderEnterpriseNumber !== null) return null;
+  // Corporate director — emit a mandate edge for the group graph.
+  if (holderEnterpriseNumber !== null) {
+    return {
+      kind: "corporate",
+      value: {
+        role: role || "Unknown",
+        holder_enterprise_number: holderEnterpriseNumber,
+        holder_name: holderName,
+        since,
+      },
+    };
+  }
+
+  // Natural-person director — must have a name to be useful as a prospect.
   if (!holderName) return null;
-
   return {
-    role: role || "Unknown",
-    holder_name: holderName,
-    holder_enterprise_number: null,
-    since,
+    kind: "person",
+    value: {
+      role: role || "Unknown",
+      holder_name: holderName,
+      holder_enterprise_number: null,
+      since,
+    },
   };
 }
 

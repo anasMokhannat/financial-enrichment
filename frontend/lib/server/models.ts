@@ -70,6 +70,23 @@ export const Func = z.object({
 });
 export type Func = z.infer<typeof Func>;
 
+/**
+ * A "corporate mandate" — another company sitting on this company's
+ * board. Different shape from {@link Func}: the holder is a CBE, not
+ * a person. Kept on a dedicated field so the directors-as-prospects
+ * panel stays human-only while we still capture the graph edge for
+ * group-structure mapping.
+ */
+export const CorporateMandate = z.object({
+  role: z.string(),
+  holder_enterprise_number: z.string(),
+  /** Display name as it appears on KBO ("ACME HOLDING BV"). May be null
+   *  if the row only had the CBE. */
+  holder_name: z.string().nullable(),
+  since: isoDateNullable,
+});
+export type CorporateMandate = z.infer<typeof CorporateMandate>;
+
 export const Company = z.object({
   enterprise_number: z.string().describe("10-digit BCE/KBO/CBE number, no dots"),
   name: z.string().nullable(),
@@ -82,6 +99,7 @@ export const Company = z.object({
   vat_subject: z.boolean().nullable(),
   nace_codes: z.array(NaceCode).default([]),
   functions: z.array(Func).default([]),
+  corporate_mandates: z.array(CorporateMandate).default([]),
 });
 export type Company = z.infer<typeof Company>;
 

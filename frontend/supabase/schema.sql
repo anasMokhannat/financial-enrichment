@@ -10,7 +10,8 @@
 -- Tables
 --   · companies               — one row per Belgian enterprise number
 --   · nace_codes              — NACE classifications per company
---   · functions               — directors / managers / auditors
+--   · functions               — directors / managers / auditors (people)
+--   · corporate_mandates      — corporate-director graph edges
 --   · filing_references       — every annual filing reference from NBB
 --   · financial_statements    — extracted financials per filing
 --   · commercial_analyses     — cached LLM commercial-fit assessments
@@ -83,6 +84,25 @@ CREATE TABLE IF NOT EXISTS public.functions (
 
 CREATE INDEX IF NOT EXISTS functions_company_idx
     ON public.functions (enterprise_number);
+
+
+-- ── corporate_mandates ───────────────────────────────────────────────────────
+-- Each row = a corporate-director edge in the group graph. The reverse
+-- index (holder_enterprise_number) powers the "find subsidiaries" walk.
+
+CREATE TABLE IF NOT EXISTS public.corporate_mandates (
+    enterprise_number          text NOT NULL
+        REFERENCES public.companies(enterprise_number) ON DELETE CASCADE,
+    holder_enterprise_number   text NOT NULL,
+    holder_name                text,
+    role                       text NOT NULL,
+    since                      date,
+
+    PRIMARY KEY (enterprise_number, holder_enterprise_number, role)
+);
+
+CREATE INDEX IF NOT EXISTS corporate_mandates_holder_idx
+    ON public.corporate_mandates (holder_enterprise_number);
 
 
 -- ── filing_references ────────────────────────────────────────────────────────
@@ -188,6 +208,7 @@ CREATE INDEX IF NOT EXISTS commercial_analyses_generated_idx
 ALTER TABLE public.companies            ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.nace_codes           ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.functions            ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.corporate_mandates   ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.filing_references    ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.financial_statements ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.commercial_analyses  ENABLE ROW LEVEL SECURITY;
@@ -197,6 +218,7 @@ ALTER TABLE public.commercial_analyses  ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS companies_read_all            ON public.companies;
 DROP POLICY IF EXISTS nace_codes_read_all           ON public.nace_codes;
 DROP POLICY IF EXISTS functions_read_all            ON public.functions;
+DROP POLICY IF EXISTS corporate_mandates_read_all   ON public.corporate_mandates;
 DROP POLICY IF EXISTS filings_read_all              ON public.filing_references;
 DROP POLICY IF EXISTS statements_read_all           ON public.financial_statements;
 DROP POLICY IF EXISTS commercial_analyses_read_all  ON public.commercial_analyses;
@@ -207,6 +229,8 @@ CREATE POLICY nace_codes_read_all
     ON public.nace_codes FOR SELECT USING (true);
 CREATE POLICY functions_read_all
     ON public.functions FOR SELECT USING (true);
+CREATE POLICY corporate_mandates_read_all
+    ON public.corporate_mandates FOR SELECT USING (true);
 CREATE POLICY filings_read_all
     ON public.filing_references FOR SELECT USING (true);
 CREATE POLICY statements_read_all

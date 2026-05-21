@@ -25,6 +25,13 @@ export type Function = {
   since: string | null;
 };
 
+export type CorporateMandate = {
+  role: string;
+  holder_enterprise_number: string;
+  holder_name: string | null;
+  since: string | null;
+};
+
 export type Company = {
   enterprise_number: string;
   name: string | null;
@@ -37,6 +44,21 @@ export type Company = {
   vat_subject: boolean | null;
   nace_codes: NaceCode[];
   functions: Function[];
+  corporate_mandates: CorporateMandate[];
+};
+
+export type GroupNode = {
+  enterprise_number: string;
+  name: string | null;
+  role: string | null;
+  since: string | null;
+  in_cache: boolean;
+};
+
+export type GroupResponse = {
+  self: { enterprise_number: string; name: string | null };
+  parents: GroupNode[];
+  subsidiaries: GroupNode[];
 };
 
 export type FilingReference = {

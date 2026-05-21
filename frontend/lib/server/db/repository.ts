@@ -19,6 +19,7 @@ import {
   CommercialAnalysis,
   Company,
   CompanyFinancialReport,
+  type CorporateMandate,
   FilingReference,
   FinancialStatement,
   type Func,
@@ -109,6 +110,41 @@ export class EnrichmentRepository {
     if (error) throw new Error(`replaceNaceCodes insert: ${error.message}`);
   }
 
+  async replaceCorporateMandates(
+    enterpriseNumber: string,
+    mandates: CorporateMandate[],
+  ): Promise<void> {
+    const { error: delErr } = await client()
+      .from("corporate_mandates")
+      .delete()
+      .eq("enterprise_number", enterpriseNumber);
+    if (delErr) {
+      throw new Error(`replaceCorporateMandates delete: ${delErr.message}`);
+    }
+    if (mandates.length === 0) return;
+
+    // Same dedupe rationale as replaceNaceCodes: KBO can repeat the
+    // same (holder, role) pair across active + historical rows; the
+    // composite primary key would reject the insert.
+    const seen = new Set<string>();
+    const deduped: CorporateMandate[] = [];
+    for (const m of mandates) {
+      const key = `${m.holder_enterprise_number}|${m.role}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      deduped.push(m);
+    }
+
+    const rows = deduped.map((m) => ({
+      ...stripNulls(m),
+      enterprise_number: enterpriseNumber,
+    }));
+    const { error } = await client().from("corporate_mandates").insert(rows);
+    if (error) {
+      throw new Error(`replaceCorporateMandates insert: ${error.message}`);
+    }
+  }
+
   async replaceFunctions(
     enterpriseNumber: string,
     functions: Func[],
@@ -174,6 +210,7 @@ export class EnrichmentRepository {
       cbe,
       nace: report.company.nace_codes.length,
       functions: report.company.functions.length,
+      mandates: report.company.corporate_mandates.length,
       filings: report.filings.length,
       statements: report.statements.length,
       extractor,
@@ -182,6 +219,7 @@ export class EnrichmentRepository {
     await this.upsertCompany(report.company);
     await this.replaceNaceCodes(cbe, report.company.nace_codes);
     await this.replaceFunctions(cbe, report.company.functions);
+    await this.replaceCorporateMandates(cbe, report.company.corporate_mandates);
     await this.upsertFilingReferences(cbe, report.filings);
     for (const s of report.statements) {
       await this.upsertFinancialStatement(s, extractor);
@@ -194,18 +232,35 @@ export class EnrichmentRepository {
   async getCompany(enterpriseNumber: string): Promise<Company | null> {
     const { data, error } = await client()
       .from("companies")
-      .select("*, nace_codes(*), functions(*)")
+      .select("*, nace_codes(*), functions(*), corporate_mandates(*)")
       .eq("enterprise_number", enterpriseNumber)
       .maybeSingle();
     if (error) throw new Error(`getCompany: ${error.message}`);
     if (!data) return null;
     // Pluck embedded relations and strip audit columns the model doesn't carry.
-    const { nace_codes, functions, first_seen_at: _a, last_refreshed_at: _b, ...rest } =
-      data as Record<string, unknown>;
+    const {
+      nace_codes,
+      functions,
+      corporate_mandates,
+      first_seen_at: _a,
+      last_refreshed_at: _b,
+      ...rest
+    } = data as Record<string, unknown>;
     return Company.parse({
       ...rest,
       nace_codes: nace_codes ?? [],
       functions: functions ?? [],
+      // The Postgres relation row has an extra enterprise_number column;
+      // strip it before parsing into the model.
+      corporate_mandates: Array.isArray(corporate_mandates)
+        ? corporate_mandates.map((m) => {
+            const { enterprise_number: _e, ...keep } = m as Record<
+              string,
+              unknown
+            >;
+            return keep;
+          })
+        : [],
     });
   }
 
@@ -261,6 +316,60 @@ export class EnrichmentRepository {
       ms: Math.round(performance.now() - t0),
     });
     return { company, filings, statements };
+  }
+
+  // ── Group / mandates graph ────────────────────────────────────────────
+
+  /**
+   * Find every company in the cache whose board lists `holderCbe` as a
+   * corporate director. These are the holder's subsidiaries (one hop
+   * down in the group graph) that we already know about.
+   */
+  async findSubsidiaries(holderCbe: string): Promise<
+    Array<{
+      enterprise_number: string;
+      role: string;
+      since: string | null;
+      name: string | null;
+    }>
+  > {
+    const { data, error } = await client()
+      .from("corporate_mandates")
+      .select(
+        "enterprise_number, role, since, companies!inner(name)",
+      )
+      .eq("holder_enterprise_number", holderCbe);
+    if (error) throw new Error(`findSubsidiaries: ${error.message}`);
+    return (data ?? []).map((r) => {
+      const row = r as Record<string, unknown>;
+      const company = row.companies as { name?: string | null } | undefined;
+      return {
+        enterprise_number: String(row.enterprise_number),
+        role: String(row.role),
+        since: (row.since as string | null) ?? null,
+        name: company?.name ?? null,
+      };
+    });
+  }
+
+  /**
+   * Bulk-resolve display names for a set of CBEs. Used by the group
+   * endpoint to label parent nodes ("ACME HOLDING BV") that we've also
+   * scraped previously. Misses are simply absent from the returned map.
+   */
+  async getNamesByCbe(cbes: string[]): Promise<Record<string, string | null>> {
+    if (cbes.length === 0) return {};
+    const { data, error } = await client()
+      .from("companies")
+      .select("enterprise_number, name")
+      .in("enterprise_number", cbes);
+    if (error) throw new Error(`getNamesByCbe: ${error.message}`);
+    const out: Record<string, string | null> = {};
+    for (const row of data ?? []) {
+      const r = row as { enterprise_number: string; name: string | null };
+      out[r.enterprise_number] = r.name ?? null;
+    }
+    return out;
   }
 
   // ── List / stats ──────────────────────────────────────────────────────
