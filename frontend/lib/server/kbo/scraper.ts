@@ -525,10 +525,20 @@ function parseFunctionRow(cellTexts: string[], rowText: string): Func | null {
   }
 
   if (!role && !holderName) return null;
+
+  // Drop corporate directors. KBO lists two kinds of function holders:
+  // natural persons (e.g. "Jan De Wit") and legal entities (e.g.
+  // "MANAGEMENT-CO BV  0123.456.789"). The presence of a CBE number on
+  // the row is the deterministic signal that the holder is a company,
+  // not a person — only people are usable as prospects, so we skip
+  // those rows entirely at the extraction layer.
+  if (holderEnterpriseNumber !== null) return null;
+  if (!holderName) return null;
+
   return {
     role: role || "Unknown",
     holder_name: holderName,
-    holder_enterprise_number: holderEnterpriseNumber,
+    holder_enterprise_number: null,
     since,
   };
 }

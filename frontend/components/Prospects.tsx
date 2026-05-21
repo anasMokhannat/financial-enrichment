@@ -9,15 +9,12 @@ import type { Company } from "@/lib/types";
 /**
  * Lists the company's directors / officers as outreach prospects.
  *
- * KBO's "Functions" section carries two flavours: real people
- * (`holder_name` set) and corporate directors (`holder_enterprise_number`
- * set, no name). Only the former are usable as B2B prospects, so we
- * filter on `holder_name` here.
+ * The KBO scraper already drops corporate-director rows (those with a
+ * holder_enterprise_number) at extraction time, so every entry in
+ * `company.functions` is a natural person here.
  */
 export function Prospects({ company }: { company: Company }) {
-  const prospects = company.functions.filter(
-    (f) => f.holder_name && f.holder_name.trim().length > 0,
-  );
+  const prospects = company.functions;
 
   return (
     <section className="rounded-card bg-surface px-6 py-5 shadow-card ring-1 ring-surface-line">
