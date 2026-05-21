@@ -6,6 +6,12 @@ import { StatCard } from "@/components/StatCard";
 import { EnrichmentRepository } from "@/lib/server/db/repository";
 import type { StatsResponse } from "@/lib/types";
 
+// Counts come from Supabase and change whenever the cache is written
+// to or cleared. Opt out of static rendering so the page always
+// re-queries on each request instead of serving a build-time snapshot.
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 /**
  * Overview page. Hero banner + three stat tiles fed by Supabase
  * (companies + filings counts, plus the timestamp of the most recent

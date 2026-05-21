@@ -10,6 +10,10 @@ import type { NextRequest } from "next/server";
 import { EnrichmentRepository } from "@/lib/server/db/repository";
 import { errorResponse, fail, ok } from "@/lib/server/http";
 
+// Always re-query Supabase so deletes/inserts are visible immediately.
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 export async function GET(req: NextRequest): Promise<Response> {
   const { searchParams } = new URL(req.url);
 

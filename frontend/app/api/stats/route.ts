@@ -9,6 +9,11 @@
 import { EnrichmentRepository } from "@/lib/server/db/repository";
 import { errorResponse, fail, ok } from "@/lib/server/http";
 
+// Counts must reflect the live cache state — never serve a cached
+// response.
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 export async function GET(): Promise<Response> {
   const repo = EnrichmentRepository.create();
   if (repo === null) {
