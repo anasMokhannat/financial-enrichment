@@ -68,7 +68,15 @@ export class EnrichmentRepository {
   // ── Writes ────────────────────────────────────────────────────────────
 
   async upsertCompany(company: Company): Promise<void> {
-    const { nace_codes: _n, functions: _f, ...rest } = company;
+    // Strip the relation fields out — they live in their own tables
+    // (nace_codes, functions, corporate_mandates) and aren't columns
+    // on `companies`. Without this strip, PostgREST rejects the row.
+    const {
+      nace_codes: _n,
+      functions: _f,
+      corporate_mandates: _m,
+      ...rest
+    } = company;
     const row = stripNulls(rest);
     const { error } = await client()
       .from("companies")

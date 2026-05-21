@@ -192,9 +192,7 @@ export class ApolloClient {
     const url = this.baseUrl + MATCH_PATH;
     log.info("enrich request", {
       firstName,
-      lastName,
-      companyName: input.companyName ?? null,
-      domain: input.domain ?? null,
+      lastName
     });
     const t0 = performance.now();
 

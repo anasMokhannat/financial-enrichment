@@ -566,30 +566,38 @@ function parseFunctionRow(
 
   if (!role && !holderName && !holderEnterpriseNumber) return null;
 
-  // Corporate director — emit a mandate edge for the group graph.
+  // Person director. A name on the row means the holder is a natural
+  // person — even when a CBE is also present, because Belgian
+  // sole-traders / self-employed individuals are registered in KBO
+  // with their own enterprise number. The CBE is kept on the Func
+  // record (it's nullable on the schema) so we don't lose the link.
+  if (holderName) {
+    return {
+      kind: "person",
+      value: {
+        role: role || "Unknown",
+        holder_name: holderName,
+        holder_enterprise_number: holderEnterpriseNumber,
+        since,
+      },
+    };
+  }
+
+  // Corporate director: the row has a CBE but no human name — KBO
+  // renders this when the holder is a legal entity, not a person.
   if (holderEnterpriseNumber !== null) {
     return {
       kind: "corporate",
       value: {
         role: role || "Unknown",
         holder_enterprise_number: holderEnterpriseNumber,
-        holder_name: holderName,
+        holder_name: null,
         since,
       },
     };
   }
 
-  // Natural-person director — must have a name to be useful as a prospect.
-  if (!holderName) return null;
-  return {
-    kind: "person",
-    value: {
-      role: role || "Unknown",
-      holder_name: holderName,
-      holder_enterprise_number: null,
-      since,
-    },
-  };
+  return null;
 }
 
 function detectVatSubject(characteristics: string[]): boolean | null {

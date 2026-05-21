@@ -56,6 +56,7 @@ export class EnrichmentPipeline {
       name: company.name,
       nace: company.nace_codes.length,
       functions: company.functions.length,
+      corporate_mandates: company.corporate_mandates.length,
     });
 
     notify("Fetching filing references from NBB");
