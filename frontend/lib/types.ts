@@ -166,6 +166,12 @@ export type CommercialAnalysis = {
   confidence_score: number | null;
   /** Short bullet phrases explaining the confidence level. */
   confidence_factors: string[];
+  /** One or two sentences summarising how to angle a prospecting email
+   *  to people inside this company, given the financial picture. */
+  outreach_summary: string;
+  /** 3-5 ready-to-use email hooks that reference actual numbers from
+   *  the statements (revenue growth, headcount, cash position…). */
+  outreach_email_angles: string[];
   based_on_filing_refs: string[];
   model: string | null;
   generated_at: string | null;

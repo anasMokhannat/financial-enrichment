@@ -169,6 +169,11 @@ CREATE TABLE IF NOT EXISTS public.commercial_analyses (
         CHECK (confidence_score IS NULL OR confidence_score BETWEEN 0 AND 100),
     confidence_factors         jsonb NOT NULL DEFAULT '[]'::jsonb,
 
+    -- Outreach helpers: one-sentence angle + 3-5 ready-to-use email
+    -- hooks the salesperson can paste into a prospecting email.
+    outreach_summary           text  NOT NULL DEFAULT '',
+    outreach_email_angles      jsonb NOT NULL DEFAULT '[]'::jsonb,
+
     based_on_filing_refs       text[] NOT NULL DEFAULT '{}',
     model                      text,
     generated_at               timestamptz NOT NULL DEFAULT now()

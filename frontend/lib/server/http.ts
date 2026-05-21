@@ -13,6 +13,7 @@ import {
   KBOScraperError,
   NBBClientError,
   NBBNotFoundError,
+  NoFilingsError,
 } from "./errors";
 
 const EXTRACTOR_NAME = "xbrl-chain-v1";
@@ -55,6 +56,9 @@ export function errorResponse(err: unknown): NextResponse {
     return fail(404, err.message);
   }
   if (err instanceof NBBNotFoundError) {
+    return fail(404, err.message);
+  }
+  if (err instanceof NoFilingsError) {
     return fail(404, err.message);
   }
   if (err instanceof NBBClientError) {

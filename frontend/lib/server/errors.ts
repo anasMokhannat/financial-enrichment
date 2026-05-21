@@ -56,3 +56,27 @@ export class FinancialExtractionError extends Error {
     this.name = "FinancialExtractionError";
   }
 }
+
+/**
+ * KBO knows the company but NBB has no annual filings on record.
+ * Thrown by the pipeline so callers can short-circuit without
+ * persisting an empty shell. Carries the resolved Company so SSR
+ * callers can still render a header / "no filings" state.
+ */
+export class NoFilingsError extends Error {
+  readonly company: {
+    enterprise_number: string;
+    name: string | null;
+  };
+  constructor(
+    company: { enterprise_number: string; name: string | null },
+    message?: string,
+  ) {
+    super(
+      message ??
+        `No annual filings on file at NBB for ${company.name ?? company.enterprise_number}.`,
+    );
+    this.name = "NoFilingsError";
+    this.company = company;
+  }
+}

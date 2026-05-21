@@ -10,6 +10,7 @@
 
 import { KBOScraper } from "./kbo/scraper";
 import { NBBClient } from "./nbb/client";
+import { NoFilingsError } from "./errors";
 import { XbrlExtractor } from "./extraction/xbrl";
 import {
   type Company,
@@ -51,6 +52,13 @@ export class EnrichmentPipeline {
       company.enterprise_number,
       nFilings,
     );
+
+    if (references.length === 0) {
+      throw new NoFilingsError({
+        enterprise_number: company.enterprise_number,
+        name: company.name,
+      });
+    }
 
     notify(`Extractor: XBRL (chain: ${references.length} filing(s))`);
     const extractor = new XbrlExtractor(nbb);

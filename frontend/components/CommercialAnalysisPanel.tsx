@@ -3,7 +3,10 @@
 import {
   AlertCircle,
   AlertTriangle,
+  Check,
+  Copy,
   Loader2,
+  Mail,
   Shield,
   ShieldAlert,
   ShieldCheck,
@@ -210,6 +213,11 @@ function LoadedAnalysis({
         </p>
       </div>
 
+      <OutreachSection
+        summary={analysis.outreach_summary}
+        angles={analysis.outreach_email_angles}
+      />
+
       <footer className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-ink-muted">
         <span>
           Based on {analysis.based_on_filing_refs.length} filing
@@ -383,6 +391,89 @@ const VERDICT_META: Record<
     icon: ShieldX,
   },
 };
+
+/**
+ * Email-outreach helper rendered under the Recommendation block.
+ *
+ * Skipped silently when both fields are empty — happens for legacy
+ * analyses generated before this section existed, and for "avoid"
+ * verdicts where the model is told to leave the angles empty.
+ */
+function OutreachSection({
+  summary,
+  angles,
+}: {
+  summary: string;
+  angles: string[];
+}) {
+  if (!summary && angles.length === 0) return null;
+
+  return (
+    <div className="mt-5 rounded-xl border border-brand-100 bg-surface px-4 py-3">
+      <div className="flex items-center gap-2">
+        <span className="grid h-7 w-7 place-items-center rounded-lg bg-brand-50 text-brand-700">
+          <Mail className="h-3.5 w-3.5" />
+        </span>
+        <h4 className="text-[11px] font-semibold uppercase tracking-wider text-ink">
+          Email outreach
+        </h4>
+      </div>
+
+      {summary && (
+        <p className="mt-2 text-sm leading-relaxed text-ink-subtle">
+          {summary}
+        </p>
+      )}
+
+      {angles.length > 0 && (
+        <ul className="mt-3 space-y-2">
+          {angles.map((angle, i) => (
+            <OutreachAngle key={i} text={angle} />
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function OutreachAngle({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      // Clipboard API can be blocked in some browser contexts; ignore.
+    }
+  }
+
+  return (
+    <li className="group flex items-start gap-2 rounded-lg bg-surface-sub/60 px-3 py-2 text-sm text-ink">
+      <span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-brand-500" />
+      <span className="flex-1">{text}</span>
+      <button
+        type="button"
+        onClick={copy}
+        className={cn(
+          "shrink-0 rounded-md p-1 text-ink-muted ring-1 transition hover:text-ink",
+          copied
+            ? "bg-emerald-50 text-emerald-700 ring-emerald-200"
+            : "ring-transparent group-hover:ring-surface-line",
+        )}
+        title={copied ? "Copied" : "Copy to clipboard"}
+        aria-label={copied ? "Copied" : "Copy email hook"}
+      >
+        {copied ? (
+          <Check className="h-3.5 w-3.5" />
+        ) : (
+          <Copy className="h-3.5 w-3.5" />
+        )}
+      </button>
+    </li>
+  );
+}
 
 function Column({
   title,

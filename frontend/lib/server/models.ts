@@ -187,6 +187,12 @@ export const CommercialAnalysis = z.object({
   confidence_score: z.number().int().min(0).max(100).nullable(),
   /** Short bullet phrases explaining the confidence level. */
   confidence_factors: z.array(z.string()).default([]),
+  /** One or two sentences summarising how to angle a prospecting email
+   *  to people inside this company, given the financial picture. */
+  outreach_summary: z.string().default(""),
+  /** 3-5 short, ready-to-use email hooks that reference actual numbers
+   *  from the statements (revenue growth, headcount, cash position…). */
+  outreach_email_angles: z.array(z.string()).default([]),
   based_on_filing_refs: z.array(z.string()),
   model: z.string().nullable(),
   generated_at: z.string().nullable(),

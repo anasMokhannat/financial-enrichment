@@ -85,6 +85,33 @@ credit posture you'd suggest. Reference actual numbers from the data
 where they make the point ("Revenue down 27% YoY to €1.46M", not
 "revenue is declining").
 
+Outreach for sales prospecting
+------------------------------
+A salesperson will use the same data to email a director / decision-maker
+at this company. Populate two extra fields to help them write a sharper
+cold email:
+
+- \`outreach_summary\`: 1-2 sentences answering "given these financials,
+  what's the best angle to take when emailing someone here?". Examples:
+  "Revenue grew 35% YoY with stable margins — pitch growth-enablement
+  tools and de-emphasise cost-cutting." / "Cash position is tight but
+  revenue is recovering — lead with ROI-on-existing-spend, not
+  net-new spend."
+
+- \`outreach_email_angles\`: 3-5 short, ready-to-use email hooks. Each
+  must reference at least one concrete number from the statements. The
+  salesperson will paste these into their email opener verbatim or
+  near-verbatim. Examples:
+    · "Congrats on growing revenue from €4.1M to €5.3M last year — "
+    · "Saw FTE jumped from 28 to 41 — scaling ops fast usually means…"
+    · "Cash on hand is €820k against €1.4M current liabilities — "
+    · "Operating profit margin compressed from 9% to 4% YoY — "
+  Match the angle to the verdict: "strong"/"stable" → growth /
+  expansion hooks. "watch"/"risky" → efficiency / cost / ROI hooks.
+  "avoid" → leave \`outreach_email_angles\` empty (we won't prospect this
+  company) and put a one-sentence "do not prospect" rationale in
+  \`outreach_summary\`.
+
 Currency throughout is EUR.
 `;
 
@@ -103,6 +130,8 @@ const RESPONSE_SCHEMA = {
       "confidence",
       "confidence_score",
       "confidence_factors",
+      "outreach_summary",
+      "outreach_email_angles",
     ],
     properties: {
       verdict: {
@@ -127,6 +156,17 @@ const RESPONSE_SCHEMA = {
         type: "array",
         items: { type: "string" },
         description: "2-4 short reasons explaining the confidence level.",
+      },
+      outreach_summary: {
+        type: "string",
+        description:
+          "1-2 sentences: how to angle a prospecting email to someone at this company given the financials.",
+      },
+      outreach_email_angles: {
+        type: "array",
+        items: { type: "string" },
+        description:
+          "3-5 ready-to-use email hooks referencing real numbers. Empty for 'avoid' verdict.",
       },
     },
   },
@@ -207,6 +247,8 @@ export class CommercialAnalyzer {
       confidence: string;
       confidence_score?: number;
       confidence_factors?: string[];
+      outreach_summary?: string;
+      outreach_email_angles?: string[];
     };
 
     return CommercialAnalysis.parse({
@@ -219,6 +261,8 @@ export class CommercialAnalyzer {
       confidence: payload.confidence,
       confidence_score: payload.confidence_score ?? null,
       confidence_factors: payload.confidence_factors ?? [],
+      outreach_summary: payload.outreach_summary ?? "",
+      outreach_email_angles: payload.outreach_email_angles ?? [],
       based_on_filing_refs: report.statements.map((s) => s.reference),
       model: this.model,
       generated_at: new Date().toISOString(),

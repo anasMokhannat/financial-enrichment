@@ -2,11 +2,13 @@ import { notFound } from "next/navigation";
 
 import { CommercialAnalysisPanel } from "@/components/CommercialAnalysisPanel";
 import { CompanyReport } from "@/components/CompanyReport";
+import { NoFilingsCard } from "@/components/NoFilingsCard";
+import { Prospects } from "@/components/Prospects";
 import { RefreshButton } from "@/components/RefreshButton";
 import { EnrichmentRepository } from "@/lib/server/db/repository";
 import { tryNormalise } from "@/lib/server/enterpriseNumber";
 import { EnrichmentPipeline } from "@/lib/server/pipeline";
-import { KBOScraperError } from "@/lib/server/errors";
+import { KBOScraperError, NoFilingsError } from "@/lib/server/errors";
 import type { CompanyFinancialReport } from "@/lib/types";
 
 /**
@@ -47,6 +49,14 @@ export default async function CompanyPage({
       pipelineReport = await pipeline.run(cbeNorm);
     } catch (err) {
       if (err instanceof KBOScraperError) notFound();
+      if (err instanceof NoFilingsError) {
+        return (
+          <NoFilingsCard
+            cbe={err.company.enterprise_number}
+            name={err.company.name}
+          />
+        );
+      }
       throw err;
     }
     report = pipelineReport;
@@ -92,6 +102,8 @@ export default async function CompanyPage({
           </div>
         </div>
       </header>
+
+      <Prospects company={company} />
 
       <CommercialAnalysisPanel cbe={company.enterprise_number} />
 

@@ -135,8 +135,16 @@ export class KBOScraper {
     if (!q) throw new KBOScraperError("Empty query");
 
     const direct = tryNormaliseEnterpriseNumber(q);
-    const number = direct ?? (await this.searchByName(q));
-    return this.fetchDetail(number);
+    if (direct !== null) {
+      return this.fetchDetail(direct);
+    }
+    // Name-based path: the search-results table carries a clean
+    // company name in its own cell — much more reliable than the
+    // detail-page header, which interleaves the name with metadata
+    // ("FLUGIA BV  Name in another language: ..."). Capture the
+    // candidate's name and hand it to the detail parser as a hint.
+    const { number, name } = await this.resolveByName(q);
+    return this.fetchDetail(number, { preferredName: name });
   }
 
   /** List of plausible matches for a free-text name. Does not throw on >1 hit. */
@@ -147,7 +155,14 @@ export class KBOScraper {
 
   // ── private ──────────────────────────────────────────────────────────
 
-  private async searchByName(name: string): Promise<string> {
+  /**
+   * Resolve a free-text name to a single CBE candidate. Returns the
+   * candidate so callers can keep the clean tabular name for downstream
+   * use (parseDetail() prefers it over the detail-page header).
+   */
+  private async resolveByName(
+    name: string,
+  ): Promise<{ number: string; name: string | null }> {
     const html = await this.fetchSearchByName(name);
     const candidates = this.parseCandidates(html);
     if (candidates.length === 0) {
@@ -156,8 +171,15 @@ export class KBOScraper {
 
     const lower = name.toLowerCase();
     const exact = candidates.filter((c) => c.name.toLowerCase() === lower);
-    if (exact.length === 1) return exact[0].enterprise_number;
-    if (candidates.length === 1) return candidates[0].enterprise_number;
+    if (exact.length === 1) {
+      return { number: exact[0].enterprise_number, name: exact[0].name || null };
+    }
+    if (candidates.length === 1) {
+      return {
+        number: candidates[0].enterprise_number,
+        name: candidates[0].name || null,
+      };
+    }
 
     throw new AmbiguousMatchError(
       candidates.slice(0, 25),
@@ -244,7 +266,10 @@ export class KBOScraper {
     return Array.from(seen.values());
   }
 
-  private async fetchDetail(enterpriseNumber: string): Promise<Company> {
+  private async fetchDetail(
+    enterpriseNumber: string,
+    opts?: { preferredName?: string | null },
+  ): Promise<Company> {
     const params = new URLSearchParams({
       lang: "en",
       ondernemingsnummer: enterpriseNumber,
@@ -256,18 +281,31 @@ export class KBOScraper {
         `Enterprise number ${formatHuman(enterpriseNumber)} not found.`,
       );
     }
-    return this.parseDetail(enterpriseNumber, html);
+    return this.parseDetail(enterpriseNumber, html, opts?.preferredName ?? null);
   }
 
-  private parseDetail(enterpriseNumber: string, html: string): Company {
+  private parseDetail(
+    enterpriseNumber: string,
+    html: string,
+    preferredName: string | null,
+  ): Company {
     const $ = cheerio.load(html);
     const sections = this.collectSections($);
 
     const generalPairs = sections.general;
+    // Name precedence:
+    //   1. Preferred (from search-results table) — cleanest source.
+    //   2. Detail-page "Name" / "Denomination" general-info row.
+    //   3. First H1/H2/H3 on the page.
+    //   4. Human-formatted CBE number, as a last resort.
+    const preferredClean = preferredName
+      ? cleanCompanyName(preferredName)
+      : "";
     const rawName =
-      generalPairs.get("name") ??
-      generalPairs.get("denomination") ??
-      firstHeadingName($) ??
+      (preferredClean && preferredClean) ||
+      generalPairs.get("name") ||
+      generalPairs.get("denomination") ||
+      firstHeadingName($) ||
       formatHuman(enterpriseNumber);
     const name = cleanCompanyName(rawName);
 
