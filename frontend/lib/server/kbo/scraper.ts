@@ -119,7 +119,14 @@ function rowText($: CheerioAPI, row: DomNode): string {
 }
 
 function cellText($: CheerioAPI, cell: DomNode): string {
-  return $(cell).text().replace(/\s+/g, " ").trim();
+  // Clone so we can replace <br> with whitespace without mutating the
+  // parsed DOM. cheerio's .text() drops <br> entirely, which smashes
+  // adjacent values together (e.g. "WINDEUROPE<br>Name in French: ..."
+  // becomes "WINDEUROPEName in French: ...", defeating the metadata
+  // tail-stripper in cleanCompanyName).
+  const $cell = $(cell).clone();
+  $cell.find("br").replaceWith(" ");
+  return $cell.text().replace(/\s+/g, " ").trim();
 }
 
 export class KBOScraper {
@@ -223,30 +230,37 @@ export class KBOScraper {
     const seen = new Map<string, KBOCandidate>();
 
     $("tr").each((_i, row) => {
-      const cells = $(row)
-        .find("td")
-        .toArray()
-        .map((c) => cellText($, c));
-      if (cells.length < 2) return;
+      const $row = $(row);
+      const cellNodes = $row.find("td").toArray();
+      if (cellNodes.length < 2) return;
+      const cells = cellNodes.map((c) => cellText($, c));
       const joined = cells.join(" ");
       const numMatch = joined.match(ENTERPRISE_NUMBER_RE);
       if (!numMatch) return;
       const number = tryNormaliseEnterpriseNumber(numMatch[1]);
       if (!number) return;
 
-      let nameCell = "";
+      // KBO tags the name cell with class="benaming". Prefer it
+      // directly — the row also carries an index, status, units
+      // count, etc., so positional heuristics pick the wrong cell.
+      const benamingNode = $row.find("td.benaming").first();
+      let nameCell = benamingNode.length > 0 ? cellText($, benamingNode) : "";
+      if (!nameCell) {
+        for (const c of cells) {
+          if (!c || ENTERPRISE_NUMBER_FULL.test(c)) continue;
+          nameCell = c;
+          break;
+        }
+      }
+
       let addressCell: string | null = null;
       for (const c of cells) {
-        if (!c || ENTERPRISE_NUMBER_FULL.test(c)) continue;
-        if (!nameCell) {
-          nameCell = c;
-          continue;
-        }
         if (addressCell === null && BE_POSTCODE_RE.test(c)) {
           addressCell = c.trim();
           break;
         }
       }
+
       if (!seen.has(number)) {
         seen.set(number, {
           enterprise_number: number,
@@ -619,6 +633,38 @@ function detectVatSubject(characteristics: string[]): boolean | null {
   return anyVat ? false : null;
 }
 
+// KBO sometimes wraps stylised names in quotes inside td.benaming
+// (e.g. "Bowls.be"). Peel matched enclosing pairs — straight, curly,
+// guillemets — but leave unpaired quotes alone so O'Reilly keeps its
+// apostrophe. Iterates to peel layered pairs ("«Foo»" → Foo).
+const QUOTE_PAIRS: ReadonlyArray<readonly [string, string]> = [
+  ['"', '"'],
+  ["'", "'"],
+  ["“", "”"], // “ ”
+  ["‘", "’"], // ‘ ’
+  ["«", "»"],
+];
+
+function stripEnclosingQuotes(s: string): string {
+  let out = s;
+  while (true) {
+    let stripped = false;
+    for (const [open, close] of QUOTE_PAIRS) {
+      if (
+        out.length > open.length + close.length &&
+        out.startsWith(open) &&
+        out.endsWith(close)
+      ) {
+        out = out.slice(open.length, -close.length).trim();
+        stripped = true;
+        break;
+      }
+    }
+    if (!stripped) break;
+  }
+  return out;
+}
+
 function cleanCompanyName(raw: string): string {
   if (!raw) return raw;
   let cleaned = raw.trim();
@@ -626,7 +672,11 @@ function cleanCompanyName(raw: string): string {
   if (match && match.index !== undefined) {
     cleaned = cleaned.slice(0, match.index).trim();
   }
-  return cleaned.replace(/:$/, "").trim();
+  cleaned = stripEnclosingQuotes(cleaned);
+  cleaned = cleaned.replace(/\s+/g, " ").trim();
+  cleaned = cleaned.replace(/[\s,;:.\-–—]+$/, "").trim();
+  cleaned = cleaned.replace(/^[\s,;:.\-–—]+/, "").trim();
+  return cleaned;
 }
 
 function detectDissolution(
