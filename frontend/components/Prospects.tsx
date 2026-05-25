@@ -49,16 +49,14 @@ export function Prospects({ company }: { company: Company }) {
   const prospects = company.functions;
 
   return (
-    <section className="rounded-card bg-surface px-6 py-5 shadow-card ring-1 ring-surface-line">
-      <header className="mb-4 flex items-baseline justify-between gap-4">
-        <div className="flex items-center gap-2">
-          <span className="grid h-8 w-8 place-items-center rounded-lg bg-brand-50 text-brand-700">
-            <Users className="h-4 w-4" />
-          </span>
-          <h2 className="text-lg font-semibold text-ink">Prospects</h2>
+    <section className="rounded-card border border-surface-line bg-surface px-5 py-4">
+      <header className="mb-3 flex items-baseline justify-between gap-4">
+        <div className="flex items-center gap-2 text-ink">
+          <Users className="h-4 w-4 text-ink-muted" />
+          <h2 className="text-sm font-semibold">Prospects</h2>
         </div>
         <span className="text-xs text-ink-muted">
-          {prospects.length} director{prospects.length === 1 ? "" : "s"} from KBO
+          {prospects.length} director{prospects.length === 1 ? "" : "s"}
         </span>
       </header>
 
@@ -68,12 +66,12 @@ export function Prospects({ company }: { company: Company }) {
           search page sometimes hides them behind a CAPTCHA).
         </p>
       ) : (
-        <ul className="grid grid-cols-1 gap-3 md:grid-cols-2">
+        <ul className="grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-3">
           {prospects.map((p, i) => (
             <ProspectCard
               key={`${p.role}-${p.holder_name}-${i}`}
               role={p.role}
-              name={p.holder_name as string}
+              name={cleanProspectName(p.holder_name)}
               since={p.since}
               companyName={company.name}
             />
@@ -129,16 +127,16 @@ function ProspectCard({
   }
 
   return (
-    <li className="flex flex-col gap-2 rounded-xl border border-surface-line bg-surface-sub/40 px-4 py-3 transition hover:border-brand-200 hover:bg-surface">
-      <div className="flex items-start gap-3">
-        <span className="mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-brand-100 text-brand-700">
-          <Briefcase className="h-4 w-4" />
+    <li className="flex flex-col gap-1.5 rounded-lg border border-surface-line bg-surface-sub/40 px-3 py-2 transition hover:border-brand-200 hover:bg-surface">
+      <div className="flex items-start gap-2">
+        <span className="mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-md bg-brand-100 text-brand-700">
+          <Briefcase className="h-3.5 w-3.5" />
         </span>
         <div className="min-w-0 flex-1">
-          <div className="truncate text-sm font-semibold text-ink">{name}</div>
-          <div className="mt-0.5 truncate text-xs text-ink-subtle">{role}</div>
+          <div className="truncate text-xs font-semibold text-ink">{name}</div>
+          <div className="truncate text-[11px] text-ink-subtle">{role}</div>
           {since && (
-            <div className="mt-1 text-[11px] text-ink-muted">since {since}</div>
+            <div className="text-[10px] text-ink-muted">since {since}</div>
           )}
         </div>
         <CopyButton text={name} />
@@ -148,16 +146,16 @@ function ProspectCard({
         <button
           type="button"
           onClick={findEmail}
-          className="mt-1 inline-flex w-full items-center justify-center gap-1.5 rounded-full bg-brand-500 px-3 py-1.5 text-[11px] font-semibold text-white shadow-card transition hover:bg-brand-600"
+          className="inline-flex w-full items-center justify-center gap-1 rounded-full bg-brand-500 px-2.5 py-1 text-[10px] font-semibold text-white shadow-card transition hover:bg-brand-600"
         >
-          <Search className="h-3 w-3" />
+          <Search className="h-2.5 w-2.5" />
           Find email (Apollo)
         </button>
       )}
 
       {enrich.kind === "loading" && (
-        <div className="mt-1 inline-flex items-center justify-center gap-2 rounded-full bg-brand-50 px-3 py-1.5 text-[11px] font-semibold text-brand-700">
-          <Loader2 className="h-3 w-3 animate-spin" />
+        <div className="inline-flex items-center justify-center gap-1.5 rounded-full bg-brand-50 px-2.5 py-1 text-[10px] font-semibold text-brand-700">
+          <Loader2 className="h-2.5 w-2.5 animate-spin" />
           Searching Apollo…
         </div>
       )}
@@ -258,6 +256,23 @@ function EnrichResultView({
       )}
     </div>
   );
+}
+
+/**
+ * Tidy up the residue KBO leaves on director-name cells: orphan parens
+ * from stripped "(Since YYYY-MM-DD)" markers, stray space-before-comma,
+ * double whitespace, dangling punctuation. Pure display-layer fix so it
+ * cleans up old cached rows without forcing a re-scrape.
+ */
+function cleanProspectName(raw: string | null | undefined): string {
+  if (!raw) return "";
+  let s = raw.replace(/\s*\([^)]*\)\s*$/g, ""); // strip trailing "(…)" groups
+  s = s.replace(/\s*\(\s*\)\s*/g, " "); // any remaining empty "()"
+  s = s.replace(/\s*\(\s*$/, ""); // orphan open paren at end
+  s = s.replace(/\s*,\s*/g, " "); // drop commas, keep words separated
+  s = s.replace(/\s+/g, " ").trim(); // collapse internal whitespace
+  s = s.replace(/[;:.\-–—\s]+$/, "").trim(); // drop trailing junk
+  return s;
 }
 
 function CopyButton({ text, compact = false }: { text: string; compact?: boolean }) {

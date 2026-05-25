@@ -26,21 +26,12 @@ export function Sidebar() {
   const pathname = usePathname();
 
   return (
-    <aside className="w-[232px] shrink-0 border-r border-surface-line bg-surface px-3 py-5">
-      <div className="rounded-xl bg-gradient-to-br from-brand-50 to-accent-equity-50/70 px-3 py-3 ring-1 ring-brand-100">
-        <div className="text-[11px] font-semibold tracking-widest text-brand-800">
-          ENRICHMENT
-        </div>
-        <div className="mt-0.5 text-[10px] uppercase tracking-wider text-ink-muted">
-          Workspace
-        </div>
+    <aside className="w-[216px] shrink-0 border-r border-surface-line bg-surface px-3 py-4">
+      <div className="px-3 pb-3 text-sm font-semibold text-ink">
+        Enrichment
       </div>
 
-      <div className="mt-5 px-2 text-[10px] font-semibold uppercase tracking-widest text-ink-muted">
-        Pages
-      </div>
-
-      <ul className="mt-2 space-y-1">
+      <ul className="space-y-0.5">
         {pages.map((p) => {
           const active =
             pathname === p.href ||
@@ -50,22 +41,16 @@ export function Sidebar() {
               <Link
                 href={p.href}
                 className={cn(
-                  "group relative flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium text-ink-subtle transition",
+                  "group flex items-center gap-2.5 rounded-md px-3 py-1.5 text-sm font-medium transition",
                   active
-                    ? "bg-brand-50 text-brand-700 shadow-card"
-                    : "hover:bg-surface-sub hover:text-ink"
+                    ? "bg-brand-50 text-brand-700"
+                    : "text-ink-subtle hover:bg-surface-sub hover:text-ink",
                 )}
               >
-                {active && (
-                  <span
-                    aria-hidden
-                    className="absolute left-0 top-1.5 bottom-1.5 w-0.5 rounded-r-full bg-brand-500"
-                  />
-                )}
                 <p.icon
                   className={cn(
                     "h-4 w-4 transition",
-                    active ? "text-brand-600" : "group-hover:text-ink"
+                    active ? "text-brand-600" : "text-ink-muted group-hover:text-ink",
                   )}
                 />
                 <span>{p.label}</span>

@@ -64,25 +64,21 @@ export function StatCard({
 }: Props) {
   const style = ACCENT_STYLES[accent];
   return (
-    <div
-      className={cn(
-        "group relative rounded-card px-6 py-6 shadow-card ring-1 ring-surface-line transition",
-        "hover:-translate-y-0.5 hover:shadow-card-lift",
-        style.tint || "bg-surface"
-      )}
-    >
-      <div
-        className={cn(
-          "mb-4 grid h-11 w-11 place-items-center rounded-xl transition-transform group-hover:scale-105",
-          style.iconBg
-        )}
-      >
-        <Icon className={cn("h-5 w-5", style.iconFg)} />
+    <div className="rounded-card border border-surface-line bg-surface px-4 py-3.5 transition hover:border-brand-200">
+      <div className="flex items-center gap-2">
+        <div
+          className={cn(
+            "grid h-7 w-7 place-items-center rounded-md",
+            style.iconBg,
+          )}
+        >
+          <Icon className={cn("h-3.5 w-3.5", style.iconFg)} />
+        </div>
+        <div className="text-xs text-ink-muted">{label}</div>
       </div>
-      <div className="text-3xl font-bold text-ink">{value}</div>
-      <div className="mt-1 text-sm font-medium text-ink-subtle">{label}</div>
+      <div className="mt-2 text-2xl font-semibold text-ink">{value}</div>
       {caption && (
-        <div className="mt-1 text-xs text-ink-muted">{caption}</div>
+        <div className="mt-0.5 text-xs text-ink-muted">{caption}</div>
       )}
     </div>
   );

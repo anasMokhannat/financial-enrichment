@@ -48,21 +48,21 @@ export function RefreshButton({ cbe }: { cbe: string }) {
         onClick={handleClick}
         disabled={status === "loading"}
         className={cn(
-          "inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-semibold transition",
+          "inline-flex h-8 items-center gap-1.5 rounded-md border px-3 text-xs font-medium transition",
           status === "done"
             ? "border-emerald-200 bg-emerald-50 text-emerald-700"
             : status === "error"
             ? "border-rose-200 bg-rose-50 text-rose-700"
             : "border-surface-line bg-surface text-ink-subtle hover:border-brand-200 hover:bg-brand-50 hover:text-brand-700",
-          status === "loading" && "cursor-wait opacity-70"
+          status === "loading" && "cursor-wait opacity-70",
         )}
       >
         {status === "loading" ? (
-          <Loader2 className="h-4 w-4 animate-spin" />
+          <Loader2 className="h-3.5 w-3.5 animate-spin" />
         ) : status === "done" ? (
-          <CheckCircle2 className="h-4 w-4" />
+          <CheckCircle2 className="h-3.5 w-3.5" />
         ) : (
-          <RefreshCw className="h-4 w-4" />
+          <RefreshCw className="h-3.5 w-3.5" />
         )}
         {status === "loading"
           ? "Refreshing…"

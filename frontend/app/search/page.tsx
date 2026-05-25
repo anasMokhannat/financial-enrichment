@@ -31,6 +31,7 @@ const DEFAULT_FILINGS = 5;
 export default function SearchPage() {
   const router = useRouter();
   const [query, setQuery] = useState("");
+  const [postalCode, setPostalCode] = useState("");
   const [filings, setFilings] = useState<number>(DEFAULT_FILINGS);
   const [state, setState] = useState<State>({ kind: "idle" });
   const [recents, setRecents] = useState<RecentSearch[]>([]);
@@ -59,7 +60,10 @@ export default function SearchPage() {
     if (!q) return;
     setState({ kind: "loading", query: q });
     try {
-      const resp = await api.search(q, { filings });
+      const resp = await api.search(q, {
+        filings,
+        postalCode: postalCode.trim() || undefined,
+      });
       if (resp.report) {
         setState({
           kind: "single",
@@ -119,7 +123,7 @@ export default function SearchPage() {
   const isLoading = state.kind === "loading";
 
   return (
-    <div className="mx-auto flex max-w-5xl flex-col gap-6">
+    <div className="mx-auto flex max-w-5xl flex-col gap-4">
       <header>
         <div className="mb-1 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-widest text-brand-700">
           <SearchIcon className="h-3.5 w-3.5" />
@@ -135,6 +139,8 @@ export default function SearchPage() {
       <SearchBox
         value={query}
         onChange={setQuery}
+        postalCode={postalCode}
+        onPostalCodeChange={setPostalCode}
         onSubmit={() => runSearch(query.trim())}
         isLoading={isLoading}
       />

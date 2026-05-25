@@ -65,12 +65,10 @@ export function GroupStructure({ cbe }: { cbe: string }) {
   }, [cbe]);
 
   return (
-    <section className="rounded-card bg-surface px-6 py-5 shadow-card ring-1 ring-surface-line">
-      <header className="mb-4 flex items-center gap-2">
-        <span className="grid h-8 w-8 place-items-center rounded-lg bg-brand-50 text-brand-700">
-          <Network className="h-4 w-4" />
-        </span>
-        <h2 className="text-lg font-semibold text-ink">Group structure</h2>
+    <section className="rounded-card border border-surface-line bg-surface px-5 py-4">
+      <header className="mb-3 flex items-center gap-2 text-ink">
+        <Network className="h-4 w-4 text-ink-muted" />
+        <h2 className="text-sm font-semibold">Group structure</h2>
       </header>
 
       {state.kind === "loading" && (
@@ -179,7 +177,7 @@ function Direction({
           None found in the cache.
         </p>
       ) : (
-        <ul className="grid grid-cols-1 gap-2 md:grid-cols-2">
+        <ul className="grid grid-cols-1 gap-1.5 md:grid-cols-2 xl:grid-cols-3">
           {nodes.map((n, i) => (
             <li key={`${n.enterprise_number}-${n.role}-${i}`}>
               <NodeCard node={n} />
@@ -193,15 +191,15 @@ function Direction({
 
 function NodeCard({ node }: { node: GroupNode }) {
   const body = (
-    <div className="flex items-center gap-3 rounded-xl border border-surface-line bg-surface-sub/40 px-3 py-2 transition group-hover:border-brand-200 group-hover:bg-surface">
-      <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-brand-100 text-brand-700">
-        <Building2 className="h-4 w-4" />
+    <div className="flex items-center gap-2 rounded-lg border border-surface-line bg-surface-sub/40 px-2.5 py-1.5 transition group-hover:border-brand-200 group-hover:bg-surface">
+      <span className="grid h-6 w-6 shrink-0 place-items-center rounded-md bg-brand-100 text-brand-700">
+        <Building2 className="h-3 w-3" />
       </span>
       <div className="min-w-0 flex-1">
-        <div className="truncate text-sm font-semibold text-ink">
+        <div className="truncate text-xs font-semibold text-ink">
           {node.name ?? <em className="font-normal text-ink-muted">unnamed</em>}
         </div>
-        <div className="flex items-center gap-2 text-[11px] text-ink-muted">
+        <div className="flex items-center gap-1.5 text-[10px] text-ink-muted">
           <span className="font-mono">{node.enterprise_number}</span>
           {node.role && (
             <>
@@ -215,10 +213,10 @@ function NodeCard({ node }: { node: GroupNode }) {
         )}
       </div>
       {node.in_cache ? (
-        <ChevronRight className="h-4 w-4 shrink-0 text-ink-muted transition group-hover:text-brand-600" />
+        <ChevronRight className="h-3.5 w-3.5 shrink-0 text-ink-muted transition group-hover:text-brand-600" />
       ) : (
         <span
-          className="shrink-0 rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-amber-700"
+          className="shrink-0 rounded-full bg-amber-50 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-amber-700"
           title="This company has not been enriched yet. Open it via Search to add it to the graph."
         >
           New

@@ -62,7 +62,7 @@ export function CompanyReport({ report }: Props) {
     return (
       <>
         <EmptyStatementsCard hasFilings={report.filings.length > 0} />
-        <section className="rounded-card bg-surface px-6 py-5 shadow-card ring-1 ring-surface-line">
+        <section className="rounded-card border border-surface-line bg-surface px-5 py-4">
           <h2 className="mb-4 text-lg font-semibold text-ink">Legal profile</h2>
           <LegalProfile company={company} />
         </section>
@@ -72,7 +72,7 @@ export function CompanyReport({ report }: Props) {
 
   return (
     <>
-      <section className="rounded-card bg-surface px-6 py-5 shadow-card ring-1 ring-surface-line">
+      <section className="rounded-card border border-surface-line bg-surface px-5 py-4">
         <header className="mb-4 flex items-baseline justify-between gap-4">
           <h2 className="text-lg font-semibold text-ink">
             Key metrics
@@ -130,21 +130,21 @@ export function CompanyReport({ report }: Props) {
             label="Employees"
             value={
               current.employees_fte
-                ? Number(current.employees_fte).toLocaleString()
+                ? Number(current.employees_fte).toLocaleString("en-US")
                 : "—"
             }
           />
         </div>
       </section>
 
-      <section className="rounded-card bg-surface px-6 py-5 shadow-card ring-1 ring-surface-line">
+      <section className="rounded-card border border-surface-line bg-surface px-5 py-4">
         <h2 className="mb-4 text-lg font-semibold text-ink">
           Financial ratios
         </h2>
         <RatiosRow current={current} previous={previous} />
       </section>
 
-      <section className="rounded-card bg-surface px-6 py-5 shadow-card ring-1 ring-surface-line">
+      <section className="rounded-card border border-surface-line bg-surface px-5 py-4">
         <Tabs
           tabs={[
             { id: "profit", label: "Profitability" },
@@ -169,9 +169,9 @@ export function CompanyReport({ report }: Props) {
 
 function EmptyStatementsCard({ hasFilings }: { hasFilings: boolean }) {
   return (
-    <section className="rounded-card bg-surface px-6 py-10 text-center shadow-card ring-1 ring-surface-line">
-      <div className="mx-auto mb-3 grid h-12 w-12 place-items-center rounded-2xl bg-amber-50 text-amber-600">
-        <FileSearch className="h-5 w-5" />
+    <section className="rounded-card border border-surface-line bg-surface px-5 py-8 text-center">
+      <div className="mx-auto mb-3 grid h-10 w-10 place-items-center rounded-lg bg-amber-50 text-amber-600">
+        <FileSearch className="h-4 w-4" />
       </div>
       <h2 className="text-base font-semibold text-ink">
         No financial statements yet

@@ -26,6 +26,11 @@ export type ProgressCallback = (msg: string) => void;
 export type PipelineOptions = {
   filingsToRead?: number;
   onProgress?: ProgressCallback;
+  /**
+   * 4-digit Belgian postcode. Narrows KBO name-search results; ignored
+   * when `query` is already a CBE (direct number lookup is unique).
+   */
+  postalCode?: string;
 };
 
 const DEFAULT_FILINGS_TO_READ = 3;
@@ -50,7 +55,9 @@ export class EnrichmentPipeline {
 
     notify("Resolving company in KBO");
     const kbo = new KBOScraper();
-    const company: Company = await log.time("kbo.lookup", () => kbo.lookup(query));
+    const company: Company = await log.time("kbo.lookup", () =>
+      kbo.lookup(query, { postalCode: opts?.postalCode }),
+    );
     log.info("kbo resolved", {
       cbe: company.enterprise_number,
       name: company.name,

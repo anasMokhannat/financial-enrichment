@@ -54,6 +54,23 @@ const NACE_HEADER_RE =
 
 const SINCE_RE = /(?:Since|Sinds|Depuis(?:\s+le)?)\s+(.+?)(?:\s*$|\s{2,})/i;
 
+// Strips a trailing "Since <date>" / "Sinds …" / "Depuis (le) …" tail
+// from a KBO cell value. KBO appends this marker to status, address,
+// and other general-info rows; the dissolution date is captured
+// upstream via SINCE_RE before stripping, so we don't lose information.
+const SINCE_TAIL_RE = /\s*(?:Since|Sinds|Depuis(?:\s+le)?)\s+.+$/i;
+
+// KBO renders the legal-form value as `<form> (<type-code>) Since <date>`.
+// The type code (a small integer in parentheses) is a KBO-internal id
+// not meant for display; strip it after the Since tail is gone.
+const LEGAL_FORM_TYPE_CODE_TAIL = /\s*\(\d+\)\s*$/;
+
+// KBO renders address-related metadata as additional rows that, once
+// the `<br>` separator is normalised to whitespace by cellText, fold
+// into the address string. Cut everything from the marker onward.
+const ADDRESS_METADATA_TAIL =
+  /\s+(?:Additional address information|Informations?\s+compl[ée]mentaires?\s+d['’]adresse|Bijkomende\s+adresgegevens?)\b[\s\S]*$/i;
+
 const BE_POSTCODE_RE =
   /\b\d{4}\b\s+[A-ZÉÈÀÂÄÔÖÙÛÇa-zéèàâäôöùûç][^,]*/;
 
@@ -145,29 +162,36 @@ export class KBOScraper {
   }
 
   /** Resolve `query` (name or 10-digit number) to a Company. */
-  async lookup(query: string): Promise<Company> {
+  async lookup(
+    query: string,
+    opts?: { postalCode?: string },
+  ): Promise<Company> {
     const q = query.trim();
     if (!q) throw new KBOScraperError("Empty query");
 
     const direct = tryNormaliseEnterpriseNumber(q);
     if (direct !== null) {
+      // Direct CBE lookup is unique; postcode is meaningless here.
       log.info("lookup by cbe", { cbe: direct });
       return this.fetchDetail(direct);
     }
-    log.info("lookup by name", { name: q });
+    log.info("lookup by name", { name: q, postalCode: opts?.postalCode ?? null });
     // Name-based path: the search-results table carries a clean
     // company name in its own cell — much more reliable than the
     // detail-page header, which interleaves the name with metadata
     // ("FLUGIA BV  Name in another language: ..."). Capture the
     // candidate's name and hand it to the detail parser as a hint.
-    const { number, name } = await this.resolveByName(q);
+    const { number, name } = await this.resolveByName(q, opts?.postalCode);
     log.info("name resolved", { name: q, cbe: number, candidateName: name });
     return this.fetchDetail(number, { preferredName: name });
   }
 
   /** List of plausible matches for a free-text name. Does not throw on >1 hit. */
-  async searchCandidates(name: string): Promise<KBOCandidate[]> {
-    const html = await this.fetchSearchByName(name);
+  async searchCandidates(
+    name: string,
+    opts?: { postalCode?: string },
+  ): Promise<KBOCandidate[]> {
+    const html = await this.fetchSearchByName(name, opts?.postalCode);
     return this.parseCandidates(html);
   }
 
@@ -180,8 +204,9 @@ export class KBOScraper {
    */
   private async resolveByName(
     name: string,
+    postalCode?: string,
   ): Promise<{ number: string; name: string | null }> {
-    const html = await this.fetchSearchByName(name);
+    const html = await this.fetchSearchByName(name, postalCode);
     const candidates = this.parseCandidates(html);
     if (candidates.length === 0) {
       throw new KBOScraperError(`No KBO match for ${JSON.stringify(name)}`);
@@ -205,11 +230,18 @@ export class KBOScraper {
     );
   }
 
-  private async fetchSearchByName(name: string): Promise<string> {
+  private async fetchSearchByName(
+    name: string,
+    postalCode?: string,
+  ): Promise<string> {
+    // Only forward 4-digit Belgian postcodes; anything else would either
+    // be silently dropped by KBO or skew results.
+    const safePostal =
+      postalCode && /^\d{4}$/.test(postalCode) ? postalCode : "";
     const params = new URLSearchParams({
       searchWord: name,
       _oudeBenaming: "on",
-      pstcdeNPRP: "",
+      pstcdeNPRP: safePostal,
       postgemeente1: "",
       ondNP: "true",
       _ondNP: "on",
@@ -222,7 +254,9 @@ export class KBOScraper {
       _filterEnkelActieve: "on",
       actionNPRP: "Rechercher",
     });
-    return this.getText(`${SEARCH_BY_NAME}?${params.toString()}`);
+    const url = `${SEARCH_BY_NAME}?${params.toString()}`;
+    log.info("kbo search url", { name, postalCode: safePostal || null, url });
+    return this.getText(url);
   }
 
   private parseCandidates(html: string): KBOCandidate[] {
@@ -335,24 +369,29 @@ export class KBOScraper {
     const name = cleanCompanyName(rawName);
 
     const statusText = generalPairs.get("status") ?? "";
+    // Dissolution is detected BEFORE stripping the "Since <date>" tail,
+    // because that's the only place we get the dissolution date from.
     const dissolutionDate = detectDissolution(statusText, generalPairs);
+    const cleanedStatus = stripSinceTail(statusText);
+    const cleanedAddress = cleanAddress(
+      pickAddress(generalPairs, enterpriseNumber),
+    );
+    const cleanedLegalForm = cleanLegalForm(
+      generalPairs.get("legal form") ?? generalPairs.get("juridische vorm"),
+    );
+    const cleanedTradeName = stripSinceTail(
+      generalPairs.get("name in another language") ??
+        generalPairs.get("commercial name"),
+    );
     const vatSubject = detectVatSubject(sections.characteristics);
 
     return Company.parse({
       enterprise_number: enterpriseNumber,
       name,
-      trade_name:
-        generalPairs.get("name in another language") ??
-        generalPairs.get("commercial name") ??
-        null,
-      legal_form:
-        generalPairs.get("legal form") ?? generalPairs.get("juridische vorm") ?? null,
-      address:
-        generalPairs.get("address of the registered office") ??
-        generalPairs.get("address") ??
-        generalPairs.get("adres") ??
-        null,
-      status: statusText || null,
+      trade_name: cleanedTradeName,
+      legal_form: cleanedLegalForm,
+      address: cleanedAddress,
+      status: cleanedStatus,
       start_date: parseDate(
         generalPairs.get("start date") ?? generalPairs.get("startdatum") ?? "",
       ),
@@ -614,6 +653,88 @@ function parseFunctionRow(
   return null;
 }
 
+/**
+ * Resolve the registered-office address from the parsed general-info
+ * map. KBO's English detail page has historically used several
+ * different label strings (with/without "the", "of the registered
+ * office", just "address", etc.), and the Dutch/French variants leak
+ * through when KBO's lang switch fails. Three layers of resolution:
+ *
+ *   1. Known exact labels (cheap map lookup).
+ *   2. Any label containing an address-like word.
+ *   3. Any value matching the Belgian postcode pattern — last-resort
+ *      fallback for cases where the label changes entirely.
+ *
+ * Logs the full set of general-pair keys when nothing matches so we
+ * can extend the label list next time.
+ */
+function pickAddress(
+  general: Map<string, string>,
+  enterpriseNumber: string,
+): string | null {
+  const exactKeys = [
+    "address of the registered office",
+    "address of registered office",
+    "address",
+    "registered office",
+    "headoffice",
+    "head office",
+    "adres",
+    "adres van de zetel",
+    "adres van de maatschappelijke zetel",
+    "maatschappelijke zetel",
+    "zetel",
+    "adresse",
+    "adresse du siège social",
+    "adresse du siège",
+    "siège social",
+    "siège",
+  ];
+  for (const key of exactKeys) {
+    const v = general.get(key);
+    if (v && v.trim()) return v.trim();
+  }
+
+  for (const [k, v] of general.entries()) {
+    if (!v || !v.trim()) continue;
+    if (/(address|adresse|adres|zetel|siège|siege)/i.test(k)) {
+      return v.trim();
+    }
+  }
+
+  for (const v of general.values()) {
+    if (v && BE_POSTCODE_RE.test(v)) return v.trim();
+  }
+
+  log.warn("address not resolved", {
+    cbe: enterpriseNumber,
+    generalKeys: Array.from(general.keys()),
+  });
+  return null;
+}
+
+function stripSinceTail(text: string | null | undefined): string | null {
+  if (!text) return null;
+  const cleaned = text.replace(SINCE_TAIL_RE, "").trim();
+  return cleaned || null;
+}
+
+function cleanLegalForm(text: string | null | undefined): string | null {
+  if (!text) return null;
+  let out = text.replace(SINCE_TAIL_RE, "");
+  out = out.replace(LEGAL_FORM_TYPE_CODE_TAIL, "");
+  out = out.trim();
+  return out || null;
+}
+
+function cleanAddress(text: string | null | undefined): string | null {
+  if (!text) return null;
+  let out = text.replace(ADDRESS_METADATA_TAIL, "");
+  out = out.replace(SINCE_TAIL_RE, "");
+  out = out.trim();
+  return out || null;
+}
+
 function detectVatSubject(characteristics: string[]): boolean | null {
   if (characteristics.length === 0) return null;
   for (const line of characteristics) {
@@ -705,6 +826,7 @@ export const _testing = {
   parseNaceRow,
   parseFunctionRow,
   cleanCompanyName,
+  pickAddress,
   detectVatSubject,
   detectDissolution,
   matchSectionHeader,

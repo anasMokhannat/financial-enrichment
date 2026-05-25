@@ -544,7 +544,7 @@ function GenerateButton({
 
 function Card({ children }: { children: React.ReactNode }) {
   return (
-    <section className="rounded-card bg-surface px-6 py-5 shadow-card ring-1 ring-surface-line">
+    <section className="rounded-card border border-surface-line bg-surface px-5 py-4">
       {children}
     </section>
   );

@@ -27,14 +27,23 @@ export async function GET(req: NextRequest): Promise<Response> {
     ? Math.min(Math.max(Number(filingsParam), 1), 20)
     : undefined;
 
+  // 4-digit Belgian postcode used to disambiguate name searches in KBO.
+  // Ignored entirely on direct CBE lookups (the CBE is already unique).
+  const rawPostal = (searchParams.get("postal_code") ?? "").trim();
+  const postalCode = /^\d{4}$/.test(rawPostal) ? rawPostal : undefined;
+
   const cbe = tryNormalise(q);
   const repo = EnrichmentRepository.create();
 
-  // 1. Cache fast-path
+  // 1. Cache fast-path. Trust the cache: if the company is persisted
+  // at all, serve it. The previous `statements.length > 0` gate caused
+  // every visit to re-scrape KBO + re-hit NBB + re-run PDF extraction
+  // for companies whose extraction had produced 0 statements (failed,
+  // abbreviated, etc.). The user has `?refresh=true` for forced re-runs.
   if (repo !== null && !refresh && cbe !== null) {
     try {
       const cached = await repo.getReport(cbe);
-      if (cached && cached.statements.length > 0) {
+      if (cached) {
         return ok({
           query: q,
           report: cached,
@@ -51,7 +60,7 @@ export async function GET(req: NextRequest): Promise<Response> {
   let report;
   try {
     const pipeline = new EnrichmentPipeline();
-    report = await pipeline.run(q, { filingsToRead: filings });
+    report = await pipeline.run(q, { filingsToRead: filings, postalCode });
   } catch (err) {
     return errorResponse(err);
   }

@@ -122,11 +122,12 @@ export const api = {
   /** Resolve a name or CBE to a CompanyFinancialReport. */
   search(
     q: string,
-    opts?: { refresh?: boolean; filings?: number }
+    opts?: { refresh?: boolean; filings?: number; postalCode?: string }
   ): Promise<CompanySearchResponse> {
     const params = new URLSearchParams({ q });
     if (opts?.refresh) params.set("refresh", "true");
     if (opts?.filings !== undefined) params.set("filings", String(opts.filings));
+    if (opts?.postalCode) params.set("postal_code", opts.postalCode);
     return request<CompanySearchResponse>(`/api/companies/search?${params}`);
   },
 

@@ -1,11 +1,11 @@
 import { notFound } from "next/navigation";
 
 import { CommercialAnalysisPanel } from "@/components/CommercialAnalysisPanel";
+import { CompanyHeader } from "@/components/CompanyHeader";
 import { CompanyReport } from "@/components/CompanyReport";
 import { GroupStructure } from "@/components/GroupStructure";
 import { NoFilingsCard } from "@/components/NoFilingsCard";
 import { Prospects } from "@/components/Prospects";
-import { RefreshButton } from "@/components/RefreshButton";
 import { EnrichmentRepository } from "@/lib/server/db/repository";
 import { tryNormalise } from "@/lib/server/enterpriseNumber";
 import { EnrichmentPipeline } from "@/lib/server/pipeline";
@@ -43,7 +43,14 @@ export default async function CompanyPage({
     }
   }
 
-  if (report === null || report.statements.length === 0) {
+  // Trust the cache. If the company has been persisted at all, render
+  // what we have — even when `statements` is empty (the pipeline can
+  // legitimately produce 0 statements when PDF extraction fails or
+  // filings are abbreviated). The user has the `Refresh` button to
+  // force a fresh pipeline run; we shouldn't auto-rerun on every
+  // visit, because each rerun costs an NBB call + N PDF + N OpenAI
+  // round-trips and the result is usually identical.
+  if (report === null) {
     let pipelineReport;
     try {
       const pipeline = new EnrichmentPipeline();
@@ -75,34 +82,8 @@ export default async function CompanyPage({
   const { company } = report;
 
   return (
-    <div className="mx-auto flex max-w-7xl flex-col gap-6">
-      <header className="rounded-card bg-surface px-6 py-6 shadow-card ring-1 ring-surface-line">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-bold text-ink">
-              {company.name ?? `CBE ${company.enterprise_number}`}
-            </h1>
-            <div className="mt-1 font-mono text-xs text-ink-muted">
-              {company.enterprise_number}
-            </div>
-            <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-sm text-ink-subtle">
-              {company.legal_form && <span>{company.legal_form}</span>}
-              {company.status && (
-                <span className="text-ink">{company.status}</span>
-              )}
-              {company.address && <span>{company.address}</span>}
-            </div>
-          </div>
-          <div className="flex flex-col items-end gap-2">
-            <RefreshButton cbe={company.enterprise_number} />
-            {company.dissolution_date && (
-              <span className="rounded-full bg-rose-50 px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-rose-700 ring-1 ring-rose-200">
-                Dissolved {company.dissolution_date}
-              </span>
-            )}
-          </div>
-        </div>
-      </header>
+    <div className="mx-auto flex max-w-7xl flex-col gap-4">
+      <CompanyHeader report={report} />
 
       <Prospects company={company} />
 
