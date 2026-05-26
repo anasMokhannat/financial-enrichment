@@ -11,7 +11,6 @@
 import type {
   AmbiguousMatchError,
   AppProfile,
-  BulkSearchResponse,
   CommercialAnalysis,
   CompanyFinancialReport,
   CompanyListResponse,
@@ -158,17 +157,6 @@ export const api = {
       `/api/companies/${cbe}/refresh${qs ? `?${qs}` : ""}`,
       { method: "POST" }
     );
-  },
-
-  /** Resolve up to 100 queries in one call. */
-  bulkSearch(
-    queries: string[],
-    opts?: { refresh?: boolean }
-  ): Promise<BulkSearchResponse> {
-    return request<BulkSearchResponse>("/api/companies/bulk", {
-      method: "POST",
-      body: JSON.stringify({ queries, refresh: opts?.refresh ?? false }),
-    });
   },
 
   /** Paginated list of every company in Supabase. */

@@ -93,10 +93,6 @@ export default async function CompaniesPage({
             <Link href="/search" className="font-medium text-brand-700 hover:text-brand-800">
               Search
             </Link>{" "}
-            or{" "}
-            <Link href="/bulk" className="font-medium text-brand-700 hover:text-brand-800">
-              Bulk
-            </Link>{" "}
             to add the first ones.
           </p>
         </div>

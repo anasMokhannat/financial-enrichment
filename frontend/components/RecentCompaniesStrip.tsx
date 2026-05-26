@@ -30,7 +30,7 @@ type State =
  *
  * Three states it renders:
  *   - loading    → skeleton tiles in the same grid shape
- *   - empty      → friendly nudge linking to Search + Bulk
+ *   - empty      → friendly nudge linking to Search
  *   - populated  → up to 8 clickable cards, each linking to its detail
  *   - 503        → service-unavailable note (Supabase off)
  */
@@ -197,18 +197,12 @@ function EmptyState() {
         Run your first enrichment to start populating the cache. Each company
         you look up will appear here for one-click re-open.
       </p>
-      <div className="mt-4 flex justify-center gap-2">
+      <div className="mt-4 flex justify-center">
         <Link
           href="/search"
           className="inline-flex items-center rounded-full bg-brand-500 px-4 py-2 text-sm font-semibold text-white shadow-glow transition hover:bg-brand-600"
         >
           Search a company
-        </Link>
-        <Link
-          href="/bulk"
-          className="inline-flex items-center rounded-full border border-surface-line bg-surface px-4 py-2 text-sm font-semibold text-ink-subtle transition hover:border-brand-200 hover:bg-brand-50 hover:text-brand-700"
-        >
-          Bulk enrich
         </Link>
       </div>
     </div>

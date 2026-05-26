@@ -124,21 +124,6 @@ export type AmbiguousMatchError = {
   candidates: CandidateMatch[];
 };
 
-export type BulkSearchResult = {
-  query: string;
-  status: "ok" | "not_found" | "ambiguous" | "error";
-  report: CompanyFinancialReport | null;
-  candidates: CandidateMatch[] | null;
-  from_cache: boolean;
-  error: string | null;
-};
-
-export type BulkSearchResponse = {
-  results: BulkSearchResult[];
-  completed_at: string;
-  elapsed_ms: number;
-};
-
 export type HealthResponse = {
   status: "ok";
   services: {

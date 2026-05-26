@@ -4,7 +4,6 @@ import {
   Building2,
   Calculator,
   LayoutDashboard,
-  Layers,
   Search,
   UserCog,
 } from "lucide-react";
@@ -24,7 +23,6 @@ import { cn } from "@/lib/cn";
 const pages = [
   { label: "Overview", href: "/" as const, icon: LayoutDashboard },
   { label: "Search", href: "/search" as const, icon: Search },
-  { label: "Bulk", href: "/bulk" as const, icon: Layers },
   { label: "Companies", href: "/companies" as const, icon: Building2 },
   { label: "Annexe", href: "/annexe" as const, icon: Calculator },
   { label: "Profile", href: "/profile" as const, icon: UserCog },
