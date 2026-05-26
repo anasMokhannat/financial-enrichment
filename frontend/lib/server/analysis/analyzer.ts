@@ -13,7 +13,12 @@ import OpenAI from "openai";
 
 import { env, hasOpenAI } from "../config";
 import { createLogger } from "../log";
-import { CommercialAnalysis, type CompanyFinancialReport } from "../models";
+import {
+  type AppProfile,
+  CommercialAnalysis,
+  type CompanyFinancialReport,
+  isProfileBlank,
+} from "../models";
 
 const log = createLogger("analyzer");
 
@@ -116,6 +121,40 @@ cold email:
   \`outreach_summary\`.
 
 Currency throughout is EUR.
+
+ICP fit (commercial-direction read)
+-----------------------------------
+The financial \`verdict\` above is purely a credit-quality read on the
+target. \`icp_fit\` is a separate, commercial-direction read: how well
+does this target match the user's own ICP?
+
+The user's profile (their own company + their stated ICP) is provided
+in the user payload under \`user_profile\`. If that block is absent, set
+\`icp_fit\` to "unknown" and \`icp_fit_reasons\` to a single sentence
+explaining the profile isn't configured.
+
+When a profile IS present, pick from:
+- "strong_fit":  Industry, size, geography, and signals all match the
+                 user's ICP. The target is a textbook prospect.
+- "partial_fit": Some ICP dimensions match well, others are off (e.g.
+                 right industry but wrong size, or right size but
+                 outside their stated geo).
+- "weak_fit":    Most ICP dimensions are off; the target only loosely
+                 resembles what the user is looking for.
+- "no_fit":      Hits a stated disqualifier, or the industry / model is
+                 fundamentally outside what the user serves.
+- "unknown":     Profile not configured, or profile too sparse to judge.
+
+Populate \`icp_fit_reasons\` with 2-4 short phrases that each name a
+specific match or mismatch ("Industry: NACE 49.41 (freight road) ✓
+matches stated 'logistics SMBs'", "Size: 6 FTE — below the user's
+stated 10–100 FTE band").
+
+When framing \`outreach_summary\` and \`outreach_email_angles\`, use the
+profile context too: tie the hook to the user's own offering when fit
+is strong; back off / soften the pitch when fit is weak; for "no_fit",
+\`outreach_email_angles\` must be empty and \`outreach_summary\` should
+state "Outside your stated ICP — do not prospect."
 `;
 
 const RESPONSE_SCHEMA = {
@@ -133,6 +172,8 @@ const RESPONSE_SCHEMA = {
       "confidence",
       "confidence_score",
       "confidence_factors",
+      "icp_fit",
+      "icp_fit_reasons",
       "outreach_summary",
       "outreach_email_angles",
     ],
@@ -159,6 +200,24 @@ const RESPONSE_SCHEMA = {
         type: "array",
         items: { type: "string" },
         description: "2-4 short reasons explaining the confidence level.",
+      },
+      icp_fit: {
+        type: "string",
+        enum: [
+          "strong_fit",
+          "partial_fit",
+          "weak_fit",
+          "no_fit",
+          "unknown",
+        ],
+        description:
+          "Commercial-direction fit vs the user's stated ICP. 'unknown' when no profile is configured.",
+      },
+      icp_fit_reasons: {
+        type: "array",
+        items: { type: "string" },
+        description:
+          "2-4 short phrases naming specific ICP matches or mismatches.",
       },
       outreach_summary: {
         type: "string",
@@ -214,7 +273,10 @@ export class CommercialAnalyzer {
     return new CommercialAnalyzer();
   }
 
-  async analyze(report: CompanyFinancialReport): Promise<CommercialAnalysis> {
+  async analyze(
+    report: CompanyFinancialReport,
+    opts?: { profile?: AppProfile | null },
+  ): Promise<CommercialAnalysis> {
     const cbe = report.company.enterprise_number;
     if (report.statements.length === 0) {
       throw new AnalysisUnavailableError(
@@ -222,12 +284,13 @@ export class CommercialAnalyzer {
       );
     }
 
-    const userPayload = serialiseForPrompt(report);
+    const userPayload = serialiseForPrompt(report, opts?.profile ?? null);
     log.info("analyze start", {
       cbe,
       model: this.model,
       statements: report.statements.length,
       payloadChars: userPayload.length,
+      hasProfile: !isProfileBlank(opts?.profile),
     });
     const t0 = performance.now();
 
@@ -258,6 +321,8 @@ export class CommercialAnalyzer {
       confidence: string;
       confidence_score?: number;
       confidence_factors?: string[];
+      icp_fit?: string;
+      icp_fit_reasons?: string[];
       outreach_summary?: string;
       outreach_email_angles?: string[];
     };
@@ -272,6 +337,8 @@ export class CommercialAnalyzer {
       confidence: payload.confidence,
       confidence_score: payload.confidence_score ?? null,
       confidence_factors: payload.confidence_factors ?? [],
+      icp_fit: payload.icp_fit ?? "unknown",
+      icp_fit_reasons: payload.icp_fit_reasons ?? [],
       outreach_summary: payload.outreach_summary ?? "",
       outreach_email_angles: payload.outreach_email_angles ?? [],
       based_on_filing_refs: report.statements.map((s) => s.reference),
@@ -281,6 +348,7 @@ export class CommercialAnalyzer {
     log.info("analyze ok", {
       cbe,
       verdict: result.verdict,
+      icp_fit: result.icp_fit,
       confidence: result.confidence,
       confidence_score: result.confidence_score,
       ms: Math.round(performance.now() - t0),
@@ -289,14 +357,18 @@ export class CommercialAnalyzer {
   }
 }
 
-/** Render the report as compact JSON the model can read cheaply. */
-function serialiseForPrompt(report: CompanyFinancialReport): string {
+/** Render the report (plus the user's profile, if set) as compact JSON
+ *  the model can read cheaply. */
+function serialiseForPrompt(
+  report: CompanyFinancialReport,
+  profile: AppProfile | null,
+): string {
   const { company } = report;
   const statements = [...report.statements].sort(
     (a, b) => (b.fiscal_year ?? 0) - (a.fiscal_year ?? 0),
   );
 
-  const payload = {
+  const payload: Record<string, unknown> = {
     company: {
       enterprise_number: company.enterprise_number,
       name: company.name,
@@ -306,6 +378,7 @@ function serialiseForPrompt(report: CompanyFinancialReport): string {
       start_date: company.start_date,
       dissolution_date: company.dissolution_date,
       vat_subject: company.vat_subject,
+      address: company.address,
       nace_codes: company.nace_codes.slice(0, 6).map((n) => ({
         code: n.code,
         description: n.description,
@@ -314,6 +387,20 @@ function serialiseForPrompt(report: CompanyFinancialReport): string {
     },
     statements: statements.map(compactStatement),
   };
+
+  if (profile && !isProfileBlank(profile)) {
+    payload.user_profile = {
+      company_name: profile.company_name,
+      one_liner: profile.company_one_liner,
+      offering: profile.offering,
+      geo_focus: profile.geo_focus,
+      icp_description: profile.icp_description,
+      icp_target_industries: profile.icp_target_industries,
+      icp_target_size: profile.icp_target_size,
+      icp_disqualifiers: profile.icp_disqualifiers,
+    };
+  }
+
   return JSON.stringify(payload);
 }
 

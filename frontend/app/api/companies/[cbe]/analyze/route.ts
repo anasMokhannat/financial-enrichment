@@ -9,6 +9,7 @@
 import {
   AnalysisRepository,
   EnrichmentRepository,
+  ProfileRepository,
 } from "@/lib/server/db/repository";
 import { tryNormalise } from "@/lib/server/enterpriseNumber";
 import {
@@ -51,7 +52,21 @@ export async function POST(
         `No cached company report for ${cbeNorm}. Search/refresh it first.`,
       );
     }
-    const analysis = await analyzer.analyze(report);
+
+    // Pull the active profile (best-effort) so the analyzer biases its
+    // verdict toward the user's stated ICP. A missing/failed read just
+    // means the analyzer falls back to its profile-less behaviour.
+    let profile = null;
+    const profileRepo = ProfileRepository.create();
+    if (profileRepo !== null) {
+      try {
+        profile = await profileRepo.get();
+      } catch (err) {
+        console.warn(`Profile read failed; continuing without:`, err);
+      }
+    }
+
+    const analysis = await analyzer.analyze(report, { profile });
     try {
       await analyses.upsert(analysis);
     } catch (err) {

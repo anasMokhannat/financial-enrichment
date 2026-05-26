@@ -12,6 +12,7 @@ import {
   ShieldCheck,
   ShieldX,
   Sparkles,
+  Target,
   TrendingDown,
   TrendingUp,
 } from "lucide-react";
@@ -19,7 +20,7 @@ import { useEffect, useState } from "react";
 
 import { ApiError, api } from "@/lib/api";
 import { cn } from "@/lib/cn";
-import type { CommercialAnalysis, Verdict } from "@/lib/types";
+import type { CommercialAnalysis, IcpFit, Verdict } from "@/lib/types";
 
 type State =
   | { kind: "idle" }
@@ -144,21 +145,9 @@ function LoadedAnalysis({
   return (
     <Card>
       <header className="flex flex-wrap items-start justify-between gap-3">
-        <div className="flex items-start gap-3">
+        <div className="flex flex-wrap items-center gap-2">
           <VerdictBadge verdict={analysis.verdict} />
-          <div>
-            <h3 className="text-base font-semibold text-ink">
-              Commercial assessment
-            </h3>
-            <p className="mt-0.5 text-xs text-ink-muted">
-              AI-generated
-              {analysis.generated_at && (
-                <span className="ml-1">
-                  · {new Date(analysis.generated_at).toLocaleString()}
-                </span>
-              )}
-            </p>
-          </div>
+          <IcpFitBadge fit={analysis.icp_fit} />
         </div>
         <div className="flex items-center gap-3">
           <ConfidenceGauge
@@ -169,9 +158,34 @@ function LoadedAnalysis({
         </div>
       </header>
 
-      <p className="mt-4 text-sm leading-relaxed text-ink">
+      <p className="mt-3 text-xs text-ink-muted">
+        AI-generated
+        {analysis.generated_at && (
+          <span className="ml-1">
+            · {new Date(analysis.generated_at).toLocaleString()}
+          </span>
+        )}
+      </p>
+
+      <p className="mt-3 text-sm leading-relaxed text-ink">
         {analysis.summary}
       </p>
+
+      {analysis.icp_fit_reasons.length > 0 && (
+        <details className="mt-3 rounded-lg border border-surface-line bg-surface-sub/40 px-3 py-2 text-xs text-ink-subtle">
+          <summary className="cursor-pointer font-medium text-ink">
+            ICP fit · why
+          </summary>
+          <ul className="mt-2 space-y-1 pl-1">
+            {analysis.icp_fit_reasons.map((reason, i) => (
+              <li key={i} className="flex items-start gap-2">
+                <span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-ink-muted" />
+                <span>{reason}</span>
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
 
       {analysis.confidence_factors.length > 0 && (
         <details className="mt-3 rounded-lg bg-surface-sub/70 px-3 py-2 text-xs text-ink-subtle ring-1 ring-surface-line">
@@ -345,13 +359,62 @@ function VerdictBadge({ verdict }: { verdict: Verdict }) {
   return (
     <span
       className={cn(
-        "inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl",
-        meta.bg
+        "inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium",
+        meta.bg,
+        meta.fg,
       )}
       title={`Verdict: ${meta.label}`}
     >
-      <Icon className={cn("h-5 w-5", meta.fg)} />
-      <span className="sr-only">{meta.label}</span>
+      <Icon className="h-3.5 w-3.5" />
+      {meta.label}
+    </span>
+  );
+}
+
+const ICP_FIT_META: Record<
+  IcpFit,
+  { label: string; bg: string; fg: string }
+> = {
+  strong_fit: {
+    label: "Strong ICP fit",
+    bg: "bg-emerald-50",
+    fg: "text-emerald-700",
+  },
+  partial_fit: {
+    label: "Partial ICP fit",
+    bg: "bg-amber-50",
+    fg: "text-amber-700",
+  },
+  weak_fit: {
+    label: "Weak ICP fit",
+    bg: "bg-orange-50",
+    fg: "text-orange-700",
+  },
+  no_fit: {
+    label: "Not your ICP",
+    bg: "bg-rose-50",
+    fg: "text-rose-700",
+  },
+  unknown: {
+    label: "ICP — set profile",
+    bg: "bg-surface-sub",
+    fg: "text-ink-muted",
+  },
+};
+
+function IcpFitBadge({ fit }: { fit: IcpFit }) {
+  const meta = ICP_FIT_META[fit];
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium",
+        meta.bg,
+        meta.fg,
+      )}
+      title={meta.label}
+    >
+      <Target className="h-3.5 w-3.5" />
+      {meta.label}
     </span>
   );
 }

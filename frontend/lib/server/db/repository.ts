@@ -16,6 +16,7 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { env, hasSupabase } from "../config";
 import { createLogger } from "../log";
 import {
+  AppProfile,
   CommercialAnalysis,
   Company,
   CompanyFinancialReport,
@@ -462,6 +463,55 @@ export type CompanyListRow = {
   dissolution_date: string | null;
   last_refreshed_at: string | null;
 };
+
+// ── ProfileRepository ───────────────────────────────────────────────────
+
+const PROFILE_SINGLETON_ID = "default";
+
+export class ProfileRepository {
+  static create(): ProfileRepository | null {
+    if (!hasSupabase()) return null;
+    return new ProfileRepository();
+  }
+
+  /** Read the singleton profile row. Always returns a profile (defaults
+   *  to empty fields) so callers don't need to special-case "not yet
+   *  configured" — the row is seeded by the migration. */
+  async get(): Promise<AppProfile> {
+    const { data, error } = await client()
+      .from("app_profile")
+      .select("*")
+      .eq("id", PROFILE_SINGLETON_ID)
+      .maybeSingle();
+    if (error) throw new Error(`ProfileRepository.get: ${error.message}`);
+    if (!data) {
+      // Seed wasn't applied or row was deleted — return empty defaults.
+      return AppProfile.parse({});
+    }
+    const { id: _id, ...rest } = data as Record<string, unknown>;
+    return AppProfile.parse(rest);
+  }
+
+  async upsert(profile: AppProfile): Promise<AppProfile> {
+    const row = {
+      id: PROFILE_SINGLETON_ID,
+      company_name: profile.company_name,
+      company_one_liner: profile.company_one_liner,
+      offering: profile.offering,
+      geo_focus: profile.geo_focus,
+      icp_description: profile.icp_description,
+      icp_target_industries: profile.icp_target_industries,
+      icp_target_size: profile.icp_target_size,
+      icp_disqualifiers: profile.icp_disqualifiers,
+      updated_at: new Date().toISOString(),
+    };
+    const { error } = await client()
+      .from("app_profile")
+      .upsert(row, { onConflict: "id" });
+    if (error) throw new Error(`ProfileRepository.upsert: ${error.message}`);
+    return this.get();
+  }
+}
 
 // ── AnalysisRepository ──────────────────────────────────────────────────
 

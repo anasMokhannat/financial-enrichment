@@ -10,6 +10,7 @@
 
 import type {
   AmbiguousMatchError,
+  AppProfile,
   BulkSearchResponse,
   CommercialAnalysis,
   CompanyFinancialReport,
@@ -198,6 +199,19 @@ export const api = {
   generateAnalysis(cbe: string): Promise<CommercialAnalysis> {
     return request<CommercialAnalysis>(`/api/companies/${cbe}/analyze`, {
       method: "POST",
+    });
+  },
+
+  /** Read the singleton app profile (user's company + ICP). */
+  getProfile(): Promise<AppProfile> {
+    return request<AppProfile>("/api/profile");
+  },
+
+  /** Save the app profile. Server returns the persisted row. */
+  saveProfile(profile: AppProfile): Promise<AppProfile> {
+    return request<AppProfile>("/api/profile", {
+      method: "PUT",
+      body: JSON.stringify(profile),
     });
   },
 };

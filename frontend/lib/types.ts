@@ -174,6 +174,12 @@ export type StatsResponse = {
 
 export type Verdict = "strong" | "stable" | "watch" | "risky" | "avoid";
 export type Confidence = "high" | "medium" | "low";
+export type IcpFit =
+  | "strong_fit"
+  | "partial_fit"
+  | "weak_fit"
+  | "no_fit"
+  | "unknown";
 
 export type CommercialAnalysis = {
   enterprise_number: string;
@@ -188,6 +194,11 @@ export type CommercialAnalysis = {
   confidence_score: number | null;
   /** Short bullet phrases explaining the confidence level. */
   confidence_factors: string[];
+  /** ICP fit vs the user's stored profile. "unknown" when no profile
+   *  is configured. */
+  icp_fit: IcpFit;
+  /** 2-4 short reasons explaining the ICP fit decision. */
+  icp_fit_reasons: string[];
   /** One or two sentences summarising how to angle a prospecting email
    *  to people inside this company, given the financial picture. */
   outreach_summary: string;
@@ -197,4 +208,16 @@ export type CommercialAnalysis = {
   based_on_filing_refs: string[];
   model: string | null;
   generated_at: string | null;
+};
+
+export type AppProfile = {
+  company_name: string;
+  company_one_liner: string;
+  offering: string;
+  geo_focus: string;
+  icp_description: string;
+  icp_target_industries: string;
+  icp_target_size: string;
+  icp_disqualifiers: string;
+  updated_at: string | null;
 };

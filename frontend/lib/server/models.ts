@@ -193,6 +193,20 @@ export type Verdict = z.infer<typeof Verdict>;
 export const Confidence = z.enum(["high", "medium", "low"]);
 export type Confidence = z.infer<typeof Confidence>;
 
+/**
+ * How well the target company fits the user's stated ICP. Independent
+ * of {@link Verdict} — verdict is the financial-health read; ICP fit is
+ * the commercial-direction read. Both are surfaced side by side.
+ */
+export const IcpFit = z.enum([
+  "strong_fit",
+  "partial_fit",
+  "weak_fit",
+  "no_fit",
+  "unknown",
+]);
+export type IcpFit = z.infer<typeof IcpFit>;
+
 export const CommercialAnalysis = z.object({
   enterprise_number: z.string(),
   verdict: Verdict,
@@ -205,6 +219,11 @@ export const CommercialAnalysis = z.object({
   confidence_score: z.number().int().min(0).max(100).nullable(),
   /** Short bullet phrases explaining the confidence level. */
   confidence_factors: z.array(z.string()).default([]),
+  /** ICP fit derived from the user's profile. "unknown" when no profile
+   *  is set — the analyzer falls back to financial-only judgement. */
+  icp_fit: IcpFit.default("unknown"),
+  /** 2-4 short reasons explaining the ICP fit decision. */
+  icp_fit_reasons: z.array(z.string()).default([]),
   /** One or two sentences summarising how to angle a prospecting email
    *  to people inside this company, given the financial picture. */
   outreach_summary: z.string().default(""),
@@ -216,3 +235,37 @@ export const CommercialAnalysis = z.object({
   generated_at: z.string().nullable(),
 });
 export type CommercialAnalysis = z.infer<typeof CommercialAnalysis>;
+
+// ── App profile (user's own company + ICP) ─────────────────────────────
+
+/**
+ * The user-of-this-app's own company info plus their ICP. Single row
+ * for v1 (no auth); the analyzer reads this and biases its output
+ * toward what *this user* cares about. Free-text fields throughout so
+ * the LLM can reason flexibly instead of forcing rigid filters.
+ */
+export const AppProfile = z.object({
+  company_name: z.string().default(""),
+  company_one_liner: z.string().default(""),
+  offering: z.string().default(""),
+  geo_focus: z.string().default(""),
+  icp_description: z.string().default(""),
+  icp_target_industries: z.string().default(""),
+  icp_target_size: z.string().default(""),
+  icp_disqualifiers: z.string().default(""),
+  updated_at: z.string().nullable().default(null),
+});
+export type AppProfile = z.infer<typeof AppProfile>;
+
+export function isProfileBlank(p: AppProfile | null | undefined): boolean {
+  if (!p) return true;
+  return (
+    !p.company_name.trim() &&
+    !p.company_one_liner.trim() &&
+    !p.offering.trim() &&
+    !p.icp_description.trim() &&
+    !p.icp_target_industries.trim() &&
+    !p.icp_target_size.trim() &&
+    !p.icp_disqualifiers.trim()
+  );
+}

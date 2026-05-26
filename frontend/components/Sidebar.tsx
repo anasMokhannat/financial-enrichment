@@ -1,6 +1,13 @@
 "use client";
 
-import { Building2, Calculator, LayoutDashboard, Layers, Search } from "lucide-react";
+import {
+  Building2,
+  Calculator,
+  LayoutDashboard,
+  Layers,
+  Search,
+  UserCog,
+} from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -20,6 +27,7 @@ const pages = [
   { label: "Bulk", href: "/bulk" as const, icon: Layers },
   { label: "Companies", href: "/companies" as const, icon: Building2 },
   { label: "Annexe", href: "/annexe" as const, icon: Calculator },
+  { label: "Profile", href: "/profile" as const, icon: UserCog },
 ];
 
 export function Sidebar() {
