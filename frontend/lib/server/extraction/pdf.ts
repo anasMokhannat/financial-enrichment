@@ -148,7 +148,7 @@ const RESPONSE_SCHEMA = {
   },
 } as const;
 
-function nullableNumber() {
+function nullableNumber() { 
   return { type: ["number", "null"] };
 }
 

@@ -11,8 +11,7 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 
-import { BalanceSheetChart } from "@/components/charts/BalanceSheetChart";
-import { ProfitabilityChart } from "@/components/charts/ProfitabilityChart";
+import { LiquidityChart } from "@/components/charts/LiquidityChart";
 import { LegalProfile } from "@/components/LegalProfile";
 import { RatiosRow } from "@/components/RatiosRow";
 import { Tabs } from "@/components/Tabs";
@@ -147,17 +146,13 @@ export function CompanyReport({ report }: Props) {
       <section className="rounded-card border border-surface-line bg-surface px-5 py-4">
         <Tabs
           tabs={[
-            { id: "profit", label: "Profitability" },
-            { id: "balance", label: "Balance sheet" },
+            { id: "liquidity", label: "Liquidity" },
             { id: "legal", label: "Legal profile" },
           ]}
         >
           {(active) => {
-            if (active === "profit") {
-              return <ProfitabilityChart statements={sorted} />;
-            }
-            if (active === "balance") {
-              return <BalanceSheetChart statements={sorted} />;
+            if (active === "liquidity") {
+              return <LiquidityChart statements={sorted} />;
             }
             return <LegalProfile company={company} />;
           }}

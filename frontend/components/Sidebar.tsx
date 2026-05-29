@@ -1,12 +1,6 @@
 "use client";
 
-import {
-  Building2,
-  Calculator,
-  LayoutDashboard,
-  Search,
-  UserCog,
-} from "lucide-react";
+import { Building2, LayoutDashboard, Search, UserCog } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -24,7 +18,6 @@ const pages = [
   { label: "Overview", href: "/" as const, icon: LayoutDashboard },
   { label: "Search", href: "/search" as const, icon: Search },
   { label: "Companies", href: "/companies" as const, icon: Building2 },
-  { label: "Annexe", href: "/annexe" as const, icon: Calculator },
   { label: "Profile", href: "/profile" as const, icon: UserCog },
 ];
 
