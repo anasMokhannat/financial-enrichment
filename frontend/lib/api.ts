@@ -190,6 +190,19 @@ export const api = {
     });
   },
 
+  /** Short-lived signed URL for the stored PDF of one filing. 404
+   *  when the filing has no stored PDF (legacy row pre-bucket, or
+   *  upload failed at extraction time — refresh the company to retry). */
+  getFilingPdfUrl(
+    cbe: string,
+    reference: string,
+  ): Promise<{ signed_url: string; expires_in: number }> {
+    const safeRef = encodeURIComponent(reference);
+    return request<{ signed_url: string; expires_in: number }>(
+      `/api/companies/${cbe}/filings/${safeRef}/pdf`,
+    );
+  },
+
   /** Read the singleton app profile (user's company + ICP). */
   getProfile(): Promise<AppProfile> {
     return request<AppProfile>("/api/profile");

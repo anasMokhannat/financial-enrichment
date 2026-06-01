@@ -30,6 +30,7 @@ import OpenAI from "openai";
 import pdfParse from "pdf-parse/lib/pdf-parse.js";
 
 import { env, hasOpenAI } from "../config";
+import { DocumentRepository } from "../db/repository";
 import { FinancialExtractionError } from "../errors";
 import { createLogger } from "../log";
 import {
@@ -169,6 +170,18 @@ type ModelPayload = {
   employees_fte: number | null;
 };
 
+/**
+ * Result of one PDF extraction attempt. Carries both the parsed
+ * statement (null if parsing/LLM failed) and the Supabase Storage
+ * path the original PDF was uploaded to (null if upload was skipped
+ * or failed). The two are independent — a stored PDF with no
+ * statement is still useful as an audit copy.
+ */
+export type ExtractResult = {
+  statement: FinancialStatement | null;
+  storagePath: string | null;
+};
+
 export class PdfExtractor {
   private readonly client: OpenAI;
   private readonly model: string;
@@ -195,19 +208,40 @@ export class PdfExtractor {
   async extract(
     enterpriseNumber: string,
     ref: FilingReference,
-  ): Promise<FinancialStatement | null> {
+  ): Promise<ExtractResult> {
+    const noResult: ExtractResult = { statement: null, storagePath: null };
+
     let pdfBytes: Uint8Array | null;
     try {
       pdfBytes = await this.nbb.downloadPdf(ref.reference);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       log.warn("pdf download failed", { reference: ref.reference, error: msg });
-      return null;
+      return noResult;
     }
     if (!pdfBytes) {
       log.info("pdf unavailable — skipping", { reference: ref.reference });
-      return null;
+      return noResult;
     }
+
+    // Best-effort: persist the raw PDF in the annual-accounts bucket so
+    // we keep an audit copy and don't have to re-download from NBB on
+    // pipeline re-runs. Upload failures must not break extraction.
+    let storagePath: string | null = null;
+    const docs = DocumentRepository.create();
+    if (docs !== null) {
+      storagePath = await docs.upload(enterpriseNumber, ref.reference, pdfBytes);
+      if (storagePath !== null) {
+        log.info("pdf stored", { reference: ref.reference, path: storagePath });
+      }
+    }
+
+    // The upload already succeeded (or was skipped). If anything below
+    // fails, we still want the path returned so the pipeline can
+    // persist it — the audit copy remains useful even when extraction
+    // breaks. So failures from this point on yield {statement:null,
+    // storagePath} rather than the all-null `noResult`.
+    const storedOnly: ExtractResult = { statement: null, storagePath };
 
     let text: string;
     let pages = 0;
@@ -226,11 +260,11 @@ export class PdfExtractor {
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       log.warn("pdf-parse failed", { reference: ref.reference, error: msg });
-      return null;
+      return storedOnly;
     }
     if (!text.trim()) {
       log.info("pdf text empty — skipping", { reference: ref.reference });
-      return null;
+      return storedOnly;
     }
 
     const trimResult = trimToFinancialSection(text, MAX_TEXT_CHARS);
@@ -249,7 +283,7 @@ export class PdfExtractor {
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       log.warn("openai extraction failed", { reference: ref.reference, error: msg });
-      return null;
+      return storedOnly;
     }
 
     const filled = Object.values(payload).filter((v) => v !== null).length;
@@ -261,7 +295,7 @@ export class PdfExtractor {
       net_profit: payload.net_profit,
     });
 
-    return FinancialStatement.parse({
+    const statement = FinancialStatement.parse({
       enterprise_number: enterpriseNumber,
       reference: ref.reference,
       fiscal_year: fiscalYear(ref),
@@ -285,6 +319,7 @@ export class PdfExtractor {
       source: "pdf",
       raw_headings: {},
     });
+    return { statement, storagePath };
   }
 
   private async askModel(text: string): Promise<ModelPayload> {

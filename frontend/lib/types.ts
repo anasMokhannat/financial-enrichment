@@ -69,6 +69,9 @@ export type FilingReference = {
   model_type: string | null;
   language: string | null;
   accounting_format: FilingFormat;
+  /** Object path in the Supabase `annual-accounts` bucket. Null until
+   *  the PDF has been uploaded. */
+  storage_path: string | null;
   fiscal_year: number | null;
 };
 

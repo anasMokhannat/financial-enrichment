@@ -15,6 +15,7 @@ import { LiquidityChart } from "@/components/charts/LiquidityChart";
 import { LegalProfile } from "@/components/LegalProfile";
 import { RatiosRow } from "@/components/RatiosRow";
 import { Tabs } from "@/components/Tabs";
+import { ViewPdfButton } from "@/components/ViewPdfButton";
 import { cn } from "@/lib/cn";
 import { fmtEUR } from "@/lib/ratios";
 import type { CompanyFinancialReport, FinancialStatement } from "@/lib/types";
@@ -72,24 +73,30 @@ export function CompanyReport({ report }: Props) {
   return (
     <>
       <section className="rounded-card border border-surface-line bg-surface px-5 py-4">
-        <header className="mb-4 flex items-baseline justify-between gap-4">
+        <header className="mb-4 flex flex-wrap items-center justify-between gap-3">
           <h2 className="text-lg font-semibold text-ink">
             Key metrics
           </h2>
-          <label className="flex items-center gap-2 text-sm text-ink-subtle">
-            <span>Fiscal year</span>
-            <select
-              value={selectedIdx}
-              onChange={(e) => setSelectedIdx(Number(e.target.value))}
-              className="rounded-lg border border-surface-line bg-surface px-3 py-1.5 text-sm font-medium text-ink outline-none transition focus:border-brand-300"
-            >
-              {sorted.map((s, i) => (
-                <option key={s.reference} value={i}>
-                  {s.fiscal_year ? `FY ${s.fiscal_year}` : s.reference}
-                </option>
-              ))}
-            </select>
-          </label>
+          <div className="flex flex-wrap items-center gap-3">
+            <label className="flex items-center gap-2 text-sm text-ink-subtle">
+              <span>Fiscal year</span>
+              <select
+                value={selectedIdx}
+                onChange={(e) => setSelectedIdx(Number(e.target.value))}
+                className="rounded-lg border border-surface-line bg-surface px-3 py-1.5 text-sm font-medium text-ink outline-none transition focus:border-brand-300"
+              >
+                {sorted.map((s, i) => (
+                  <option key={s.reference} value={i}>
+                    {s.fiscal_year ? `FY ${s.fiscal_year}` : s.reference}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <ViewPdfButton
+              cbe={current.enterprise_number}
+              reference={current.reference}
+            />
+          </div>
         </header>
 
         <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-6">

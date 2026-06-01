@@ -93,11 +93,16 @@ export class EnrichmentPipeline {
     for (const ref of references) {
       i++;
       notify(`Extracting filing ${i}/${references.length} (ref ${ref.reference})`);
-      const stmt = await log.time(`extract ${i}/${references.length} ref=${ref.reference}`, () =>
+      const result = await log.time(`extract ${i}/${references.length} ref=${ref.reference}`, () =>
         extractor.extract(company.enterprise_number, ref),
       );
-      if (stmt !== null) {
-        statements.push(stmt);
+      // Even when extraction fails we still record the storage path, so
+      // the audit copy of the PDF is findable from the filing row.
+      if (result.storagePath !== null) {
+        ref.storage_path = result.storagePath;
+      }
+      if (result.statement !== null) {
+        statements.push(result.statement);
       } else {
         log.warn("extract returned null", { ref: ref.reference });
       }

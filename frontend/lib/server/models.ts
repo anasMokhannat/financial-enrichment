@@ -114,6 +114,9 @@ export const FilingReference = z
     model_type: z.string().nullable(),
     language: z.string().nullable(),
     accounting_format: FilingFormat.default("unknown"),
+    /** Supabase Storage object path inside the `annual-accounts` bucket.
+     *  Null until the PDF has been uploaded successfully. */
+    storage_path: z.string().nullable().default(null),
     // Derived from exercise_end. Supabase doesn't store it; the
     // pipeline output doesn't carry it. The transform below computes
     // it on parse so the frontend always sees it on the wire.
