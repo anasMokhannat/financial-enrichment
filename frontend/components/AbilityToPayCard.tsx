@@ -54,65 +54,35 @@ export function AbilityToPayCard({
         {score.explanation}
       </p>
 
-      <div className="mt-4 grid grid-cols-2 gap-2 md:grid-cols-3">
-        <Stat label="Final score" value={`${score.final_score}/100`} />
-        <Stat label="Base (recency-weighted)" value={score.base_score.toFixed(1)} />
-        <Stat
-          label="After modifiers"
-          value={score.adjusted_score.toFixed(1)}
-          delta={score.adjusted_score - score.base_score}
-        />
-      </div>
-
       {score.distress_flags.length > 0 && (
         <DistressList flags={score.distress_flags} />
       )}
 
-      {(score.flags.limited_history ||
-        score.flags.volatile ||
-        score.flags.structural_change ||
-        score.flags.low_confidence) && (
-        <AdvisoryFlags flags={score.flags} />
-      )}
-
-      <YearTable score={score} />
-
-      <details className="mt-4 rounded-lg border border-surface-line bg-surface-sub/40 px-3 py-2 text-xs text-ink-subtle">
+      <details className="mt-3 rounded-lg border border-surface-line bg-surface-sub/40 px-3 py-2 text-xs text-ink-subtle">
         <summary className="cursor-pointer font-medium text-ink">
-          How is this score computed?
+          Score breakdown
         </summary>
-        <ul className="mt-2 space-y-1 pl-1 leading-relaxed">
-          <li>
+        <div className="mt-2 space-y-3">
+          <div className="grid grid-cols-3 gap-2">
+            <MiniStat label="Base" value={score.base_score.toFixed(1)} />
+            <MiniStat
+              label="After modifiers"
+              value={score.adjusted_score.toFixed(1)}
+              delta={score.adjusted_score - score.base_score}
+            />
+            <MiniStat label="Final" value={`${score.final_score}/100`} />
+          </div>
+          <YearTable score={score} />
+          <p className="leading-relaxed">
             Uses the <span className="font-medium">3 most recent</span>{" "}
-            fiscal years only — older filings on file are ignored so
-            the score reflects the company&apos;s current state.
-          </li>
-          <li>
-            Each year scores 6 components (L · P · S · C · R · T) on a
-            0–100 band scale, weighted{" "}
-            <span className="font-mono">
-              0.25·L + 0.25·P + 0.20·S + 0.15·C + 0.10·R + 0.05·T
-            </span>
-            .
-          </li>
-          <li>
-            Years blend recency-weighted (0.5 / 0.3 / 0.2 for 3 years;
-            0.6 / 0.4 for 2; just the year for 1).
-          </li>
-          <li>
-            Trajectory modifier of ±10 fires when latest vs oldest
-            differ by ≥15 points.
-          </li>
-          <li>
-            Volatility cap at 60 when year scores swing by more than 25
-            points across the window.
-          </li>
-          <li>
-            Distress override caps the final score at 30 on red flags
-            like negative equity, debt-to-equity &gt; 4, or cash-burn
-            exceeding revenue.
-          </li>
-        </ul>
+            fiscal years. Each year scores 6 components on a 0–100 band
+            scale, blended with a 0.5 / 0.3 / 0.2 recency weight. A ±10
+            trajectory modifier and a 60-point volatility cap apply
+            when the window has ≥2 years. Distress red flags (negative
+            equity, D/E &gt; 4, cash burn &gt; revenue, …) cap the final
+            score at 30 regardless.
+          </p>
+        </div>
       </details>
     </section>
   );
@@ -168,7 +138,7 @@ function TierBadge({ tier, value }: { tier: Tier; value: number }) {
   );
 }
 
-function Stat({
+function MiniStat({
   label,
   value,
   delta,
@@ -178,27 +148,27 @@ function Stat({
   delta?: number;
 }) {
   let deltaEl: React.ReactNode = null;
-  if (delta !== undefined && delta !== 0) {
+  if (delta !== undefined && Math.round(delta * 10) !== 0) {
     const positive = delta > 0;
     const Icon = positive ? TrendingUp : TrendingDown;
     deltaEl = (
       <span
         className={cn(
-          "inline-flex items-center gap-0.5 text-[10px] font-medium",
+          "ml-1 inline-flex items-center gap-0.5 text-[9px] font-medium",
           positive ? "text-emerald-700" : "text-rose-700",
         )}
       >
-        <Icon className="h-3 w-3" />
+        <Icon className="h-2.5 w-2.5" />
         {positive ? "+" : ""}
         {delta.toFixed(1)}
       </span>
     );
   }
   return (
-    <div className="rounded-md border border-surface-line px-3 py-2">
-      <div className="text-[11px] text-ink-muted">{label}</div>
-      <div className="mt-0.5 flex items-baseline justify-between gap-2">
-        <span className="text-sm font-semibold text-ink">{value}</span>
+    <div className="rounded border border-surface-line bg-surface px-2 py-1.5">
+      <div className="text-[10px] text-ink-muted">{label}</div>
+      <div className="mt-0.5 flex items-baseline">
+        <span className="text-xs font-semibold text-ink">{value}</span>
         {deltaEl}
       </div>
     </div>
@@ -228,32 +198,6 @@ function DistressList({ flags }: { flags: string[] }) {
         ))}
       </div>
     </div>
-  );
-}
-
-function AdvisoryFlags({
-  flags,
-}: {
-  flags: AbilityToPayScore["flags"];
-}) {
-  const items: string[] = [];
-  if (flags.limited_history) items.push("Only one fiscal year on file");
-  if (flags.volatile) items.push("Year-to-year scores are volatile (capped at 60)");
-  if (flags.structural_change)
-    items.push("Possible structural change (>50% asset or headcount swing)");
-  if (flags.low_confidence) items.push("Low confidence");
-  if (items.length === 0) return null;
-  return (
-    <ul className="mt-3 flex flex-wrap gap-1.5">
-      {items.map((it) => (
-        <li
-          key={it}
-          className="rounded bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-800 ring-1 ring-amber-200"
-        >
-          {it}
-        </li>
-      ))}
-    </ul>
   );
 }
 

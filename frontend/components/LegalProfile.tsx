@@ -1,3 +1,4 @@
+import { cleanHolderName } from "@/lib/holderName";
 import type { Company } from "@/lib/types";
 
 /**
@@ -73,21 +74,26 @@ export function LegalProfile({ company }: { company: Company }) {
         {hasFunctions ? (
           <DataTable
             head={["Role", "Holder", "Holder CBE", "Since"]}
-            rows={company.functions.map((f) => [
-              f.role,
-              f.holder_name ??
-                (f.holder_enterprise_number
-                  ? `CBE ${f.holder_enterprise_number}`
-                  : "—"),
-              f.holder_enterprise_number ? (
-                <span key="cbe" className="font-mono text-xs">
-                  {f.holder_enterprise_number}
-                </span>
-              ) : (
-                "—"
-              ),
-              f.since ?? "—",
-            ])}
+            rows={company.functions.map((f) => {
+              const cleanedName = cleanHolderName(f.holder_name);
+              const holderDisplay = cleanedName
+                ? cleanedName
+                : f.holder_enterprise_number
+                ? `CBE ${f.holder_enterprise_number}`
+                : "—";
+              return [
+                f.role,
+                holderDisplay,
+                f.holder_enterprise_number ? (
+                  <span key="cbe" className="font-mono text-xs">
+                    {f.holder_enterprise_number}
+                  </span>
+                ) : (
+                  "—"
+                ),
+                f.since ?? "—",
+              ];
+            })}
           />
         ) : (
           <Empty body="No functions listed on KBO (often hidden behind CAPTCHA on public search)." />

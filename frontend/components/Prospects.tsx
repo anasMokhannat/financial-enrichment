@@ -14,6 +14,7 @@ import {
 import { useState } from "react";
 
 import { cn } from "@/lib/cn";
+import { cleanHolderName } from "@/lib/holderName";
 import type { Company } from "@/lib/types";
 
 /**
@@ -71,7 +72,7 @@ export function Prospects({ company }: { company: Company }) {
             <ProspectCard
               key={`${p.role}-${p.holder_name}-${i}`}
               role={p.role}
-              name={cleanProspectName(p.holder_name)}
+              name={cleanHolderName(p.holder_name)}
               since={p.since}
               companyName={company.name}
             />
@@ -256,23 +257,6 @@ function EnrichResultView({
       )}
     </div>
   );
-}
-
-/**
- * Tidy up the residue KBO leaves on director-name cells: orphan parens
- * from stripped "(Since YYYY-MM-DD)" markers, stray space-before-comma,
- * double whitespace, dangling punctuation. Pure display-layer fix so it
- * cleans up old cached rows without forcing a re-scrape.
- */
-function cleanProspectName(raw: string | null | undefined): string {
-  if (!raw) return "";
-  let s = raw.replace(/\s*\([^)]*\)\s*$/g, ""); // strip trailing "(…)" groups
-  s = s.replace(/\s*\(\s*\)\s*/g, " "); // any remaining empty "()"
-  s = s.replace(/\s*\(\s*$/, ""); // orphan open paren at end
-  s = s.replace(/\s*,\s*/g, " "); // drop commas, keep words separated
-  s = s.replace(/\s+/g, " ").trim(); // collapse internal whitespace
-  s = s.replace(/[;:.\-–—\s]+$/, "").trim(); // drop trailing junk
-  return s;
 }
 
 function CopyButton({ text, compact = false }: { text: string; compact?: boolean }) {
