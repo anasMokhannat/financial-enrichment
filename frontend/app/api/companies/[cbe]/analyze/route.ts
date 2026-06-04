@@ -11,7 +11,7 @@ import {
   EnrichmentRepository,
   ProfileRepository,
 } from "@/lib/server/db/repository";
-import { tryNormalise } from "@/lib/server/enterpriseNumber";
+import { tryNormaliseAnyId } from "@/lib/server/companyId";
 import {
   AnalysisUnavailableError,
   CommercialAnalyzer,
@@ -23,7 +23,7 @@ export async function POST(
   context: { params: Promise<{ cbe: string }> },
 ): Promise<Response> {
   const { cbe } = await context.params;
-  const cbeNorm = tryNormalise(cbe);
+  const cbeNorm = tryNormaliseAnyId(cbe);
   if (cbeNorm === null) {
     return fail(400, `Not a valid CBE: ${JSON.stringify(cbe)}`);
   }

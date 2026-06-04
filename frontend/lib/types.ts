@@ -10,6 +10,12 @@
 
 export type FilingFormat = "xbrl" | "pdf" | "unknown";
 
+/** ISO 3166-1 alpha-2 code for the originating registry. */
+export type Country = "BE" | "FR";
+
+/** Where filing references / extracted figures came from. */
+export type Provider = "nbb" | "inpi";
+
 export type NaceCode = {
   code: string;
   description: string | null;
@@ -34,6 +40,7 @@ export type CorporateMandate = {
 
 export type Company = {
   enterprise_number: string;
+  country: Country;
   name: string | null;
   trade_name: string | null;
   legal_form: string | null;
@@ -72,6 +79,8 @@ export type FilingReference = {
   /** Object path in the Supabase `annual-accounts` bucket. Null until
    *  the PDF has been uploaded. */
   storage_path: string | null;
+  /** "nbb" for Belgian filings, "inpi" for French. */
+  provider: Provider;
   fiscal_year: number | null;
 };
 
@@ -99,6 +108,8 @@ export type FinancialStatement = {
   employees_fte: string | null;
 
   source: FilingFormat;
+  /** "nbb" for Belgian filings, "inpi" for French. */
+  provider: Provider;
   raw_headings: Record<string, string>;
 };
 

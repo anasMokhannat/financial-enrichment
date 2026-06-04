@@ -33,6 +33,15 @@ export const env = {
     apiKey: process.env.APOLLO_API_KEY ?? "",
     baseUrl: process.env.APOLLO_API_BASE_URL ?? "https://api.apollo.io",
   },
+  inpi: {
+    /** Production base URL; override with INPI_API_BASE_URL to point at
+     *  the pre-prod environment (registre-national-entreprises-pprod). */
+    baseUrl:
+      process.env.INPI_API_BASE_URL ??
+      "https://registre-national-entreprises.inpi.fr",
+    username: process.env.INPI_USERNAME ?? "",
+    password: process.env.INPI_PASSWORD ?? "",
+  },
 } as const;
 
 export const hasNbb = (): boolean => Boolean(env.nbb.subscriptionKey);
@@ -40,3 +49,5 @@ export const hasOpenAI = (): boolean => Boolean(env.openai.apiKey);
 export const hasSupabase = (): boolean =>
   Boolean(env.supabase.url && env.supabase.serviceRoleKey);
 export const hasApollo = (): boolean => Boolean(env.apollo.apiKey);
+export const hasInpi = (): boolean =>
+  Boolean(env.inpi.username && env.inpi.password);

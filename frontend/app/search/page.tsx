@@ -6,10 +6,12 @@ import { useEffect, useState } from "react";
 
 import { AmbiguousMatches } from "@/components/AmbiguousMatches";
 import { CompanyReportCard } from "@/components/CompanyReportCard";
+import { CountrySelector } from "@/components/CountrySelector";
 import { FilingsSelect } from "@/components/FilingsSelect";
 import { RecentSearches } from "@/components/RecentSearches";
 import { SearchBox } from "@/components/SearchBox";
 import { ApiError, AmbiguousMatchApiError, api } from "@/lib/api";
+import type { Country } from "@/lib/types";
 import {
   pushRecent,
   readRecents,
@@ -30,6 +32,7 @@ const DEFAULT_FILINGS = 5;
 
 export default function SearchPage() {
   const router = useRouter();
+  const [country, setCountry] = useState<Country>("BE");
   const [query, setQuery] = useState("");
   const [postalCode, setPostalCode] = useState("");
   const [filings, setFilings] = useState<number>(DEFAULT_FILINGS);
@@ -62,7 +65,10 @@ export default function SearchPage() {
     try {
       const resp = await api.search(q, {
         filings,
-        postalCode: postalCode.trim() || undefined,
+        country,
+        // Postcode only narrows KBO name-search; INPI uses SIREN
+        // directly and ignores the field.
+        postalCode: country === "BE" ? postalCode.trim() || undefined : undefined,
       });
       if (resp.report) {
         setState({
@@ -136,11 +142,19 @@ export default function SearchPage() {
         </p>
       </header>
 
+      <CountrySelector value={country} onChange={setCountry} />
+
       <SearchBox
         value={query}
         onChange={setQuery}
         postalCode={postalCode}
         onPostalCodeChange={setPostalCode}
+        showPostalCode={country === "BE"}
+        placeholder={
+          country === "BE"
+            ? "Company name or 10-digit CBE…"
+            : "SIREN (9 digits) — e.g. 552 100 554"
+        }
         onSubmit={() => runSearch(query.trim())}
         isLoading={isLoading}
       />

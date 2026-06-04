@@ -7,7 +7,7 @@
  */
 
 import { AnalysisRepository } from "@/lib/server/db/repository";
-import { tryNormalise } from "@/lib/server/enterpriseNumber";
+import { tryNormaliseAnyId } from "@/lib/server/companyId";
 import { errorResponse, fail, ok } from "@/lib/server/http";
 
 export async function GET(
@@ -15,9 +15,9 @@ export async function GET(
   context: { params: Promise<{ cbe: string }> },
 ): Promise<Response> {
   const { cbe } = await context.params;
-  const cbeNorm = tryNormalise(cbe);
+  const cbeNorm = tryNormaliseAnyId(cbe);
   if (cbeNorm === null) {
-    return fail(400, `Not a valid CBE: ${JSON.stringify(cbe)}`);
+    return fail(400, `Not a valid CBE or SIREN: ${JSON.stringify(cbe)}`);
   }
   const repo = AnalysisRepository.create();
   if (repo === null) {

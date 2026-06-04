@@ -87,8 +87,24 @@ export const CorporateMandate = z.object({
 });
 export type CorporateMandate = z.infer<typeof CorporateMandate>;
 
+/** ISO 3166-1 alpha-2 country code for the originating registry. */
+export const Country = z.enum(["BE", "FR"]);
+export type Country = z.infer<typeof Country>;
+
+/** Data source for a filing or statement row. Belgium → NBB Central
+ *  Balance Sheet Office; France → INPI Registre National des Entreprises. */
+export const Provider = z.enum(["nbb", "inpi"]);
+export type Provider = z.infer<typeof Provider>;
+
 export const Company = z.object({
-  enterprise_number: z.string().describe("10-digit BCE/KBO/CBE number, no dots"),
+  /**
+   * Belgium → 10-digit CBE/KBO/BCE number (no dots).
+   * France  → 9-digit SIREN (no spaces).
+   * The `country` discriminator below distinguishes the two.
+   */
+  enterprise_number: z.string(),
+  /** ISO 3166-1 alpha-2 country code of the originating registry. */
+  country: Country.default("BE"),
   name: z.string().nullable(),
   trade_name: z.string().nullable(),
   legal_form: z.string().nullable(),
@@ -117,6 +133,9 @@ export const FilingReference = z
     /** Supabase Storage object path inside the `annual-accounts` bucket.
      *  Null until the PDF has been uploaded successfully. */
     storage_path: z.string().nullable().default(null),
+    /** Where this filing reference originated. Belgian filings come
+     *  from NBB; French ones from INPI. */
+    provider: Provider.default("nbb"),
     // Derived from exercise_end. Supabase doesn't store it; the
     // pipeline output doesn't carry it. The transform below computes
     // it on parse so the frontend always sees it on the wire.
@@ -168,6 +187,8 @@ export const FinancialStatement = z.object({
   employees_fte: numericString,
 
   source: FilingFormat.default("unknown"),
+  /** Where this row's extracted figures came from. */
+  provider: Provider.default("nbb"),
   raw_headings: z.record(z.string(), z.string()).default({}),
 });
 export type FinancialStatement = z.infer<typeof FinancialStatement>;

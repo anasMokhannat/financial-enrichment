@@ -119,15 +119,21 @@ export const api = {
     return request<HealthResponse>("/api/health");
   },
 
-  /** Resolve a name or CBE to a CompanyFinancialReport. */
+  /** Resolve a name or CBE/SIREN to a CompanyFinancialReport. */
   search(
     q: string,
-    opts?: { refresh?: boolean; filings?: number; postalCode?: string }
+    opts?: {
+      refresh?: boolean;
+      filings?: number;
+      postalCode?: string;
+      country?: "BE" | "FR";
+    },
   ): Promise<CompanySearchResponse> {
     const params = new URLSearchParams({ q });
     if (opts?.refresh) params.set("refresh", "true");
     if (opts?.filings !== undefined) params.set("filings", String(opts.filings));
     if (opts?.postalCode) params.set("postal_code", opts.postalCode);
+    if (opts?.country) params.set("country", opts.country);
     return request<CompanySearchResponse>(`/api/companies/search?${params}`);
   },
 

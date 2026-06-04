@@ -7,8 +7,8 @@
 
 import type { NextRequest } from "next/server";
 
+import { tryNormaliseCompanyId } from "@/lib/server/companyId";
 import { EnrichmentRepository } from "@/lib/server/db/repository";
-import { tryNormalise } from "@/lib/server/enterpriseNumber";
 import { errorResponse, extractorName, fail, ok } from "@/lib/server/http";
 import { EnrichmentPipeline } from "@/lib/server/pipeline";
 
@@ -17,10 +17,11 @@ export async function POST(
   context: { params: Promise<{ cbe: string }> },
 ): Promise<Response> {
   const { cbe } = await context.params;
-  const cbeNorm = tryNormalise(cbe);
-  if (cbeNorm === null) {
-    return fail(400, `Not a valid CBE: ${JSON.stringify(cbe)}`);
+  const normalised = tryNormaliseCompanyId(cbe);
+  if (normalised === null) {
+    return fail(400, `Not a valid CBE or SIREN: ${JSON.stringify(cbe)}`);
   }
+  const { id: cbeNorm, country } = normalised;
 
   const { searchParams } = new URL(req.url);
   const filingsParam = searchParams.get("filings");
@@ -31,7 +32,7 @@ export async function POST(
   let report;
   try {
     const pipeline = new EnrichmentPipeline();
-    report = await pipeline.run(cbeNorm, { filingsToRead: filings });
+    report = await pipeline.run(cbeNorm, { filingsToRead: filings, country });
   } catch (err) {
     return errorResponse(err);
   }

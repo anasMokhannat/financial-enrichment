@@ -7,8 +7,8 @@ import { CompanyReport } from "@/components/CompanyReport";
 import { GroupStructure } from "@/components/GroupStructure";
 import { NoFilingsCard } from "@/components/NoFilingsCard";
 import { Prospects } from "@/components/Prospects";
+import { tryNormaliseCompanyId } from "@/lib/server/companyId";
 import { EnrichmentRepository } from "@/lib/server/db/repository";
-import { tryNormalise } from "@/lib/server/enterpriseNumber";
 import { EnrichmentPipeline } from "@/lib/server/pipeline";
 import { KBOScraperError, NoFilingsError } from "@/lib/server/errors";
 import type { CompanyFinancialReport } from "@/lib/types";
@@ -30,8 +30,9 @@ export default async function CompanyPage({
   params: Promise<{ cbe: string }>;
 }) {
   const { cbe } = await params;
-  const cbeNorm = tryNormalise(cbe);
-  if (cbeNorm === null) notFound();
+  const normalised = tryNormaliseCompanyId(cbe);
+  if (normalised === null) notFound();
+  const { id: cbeNorm, country } = normalised;
 
   let report: CompanyFinancialReport | null = null;
   const repo = EnrichmentRepository.create();
@@ -55,7 +56,7 @@ export default async function CompanyPage({
     let pipelineReport;
     try {
       const pipeline = new EnrichmentPipeline();
-      pipelineReport = await pipeline.run(cbeNorm);
+      pipelineReport = await pipeline.run(cbeNorm, { country });
     } catch (err) {
       if (err instanceof KBOScraperError) notFound();
       if (err instanceof NoFilingsError) {
@@ -90,9 +91,18 @@ export default async function CompanyPage({
 
       <CommercialAnalysisPanel cbe={company.enterprise_number} />
 
-      <Prospects company={company} />
+      {/* Prospects + group structure rely on KBO's directors/mandates
+          rows, which we don't extract for French companies (INPI's
+          bilans-saisis endpoint doesn't expose them). Hiding the
+          sections is better than rendering two empty "no data" cards
+          for every French page. */}
+      {company.country === "BE" && (
+        <>
+          <Prospects company={company} />
 
-      <GroupStructure cbe={company.enterprise_number} />
+          <GroupStructure cbe={company.enterprise_number} />
+        </>
+      )}
 
       <CompanyReport report={report} />
     </div>

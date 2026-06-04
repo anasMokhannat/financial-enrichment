@@ -12,9 +12,11 @@
 import type { NextRequest } from "next/server";
 
 import { EnrichmentRepository } from "@/lib/server/db/repository";
-import { tryNormalise } from "@/lib/server/enterpriseNumber";
+import { tryNormalise as tryNormaliseCbe } from "@/lib/server/enterpriseNumber";
 import { errorResponse, extractorName, fail, ok } from "@/lib/server/http";
+import { tryNormaliseSiren } from "@/lib/server/siren";
 import { EnrichmentPipeline } from "@/lib/server/pipeline";
+import type { Country } from "@/lib/server/models";
 
 export async function GET(req: NextRequest): Promise<Response> {
   const { searchParams } = new URL(req.url);
@@ -32,7 +34,18 @@ export async function GET(req: NextRequest): Promise<Response> {
   const rawPostal = (searchParams.get("postal_code") ?? "").trim();
   const postalCode = /^\d{4}$/.test(rawPostal) ? rawPostal : undefined;
 
-  const cbe = tryNormalise(q);
+  // Country dispatch — defaults to BE for backward compatibility.
+  const rawCountry = (searchParams.get("country") ?? "BE").toUpperCase();
+  const country: Country = rawCountry === "FR" ? "FR" : "BE";
+
+  // Per-country cache identifier:
+  //   BE → CBE (10 digits)
+  //   FR → SIREN (9 digits)
+  // Both share the `enterprise_number` column; collisions are
+  // structurally impossible (CBEs start with 0 or 1, SIRENs may start
+  // with any digit but are 9 chars vs 10).
+  const cacheId =
+    country === "BE" ? tryNormaliseCbe(q) : tryNormaliseSiren(q);
   const repo = EnrichmentRepository.create();
 
   // 1. Cache fast-path. Trust the cache: if the company is persisted
@@ -40,9 +53,9 @@ export async function GET(req: NextRequest): Promise<Response> {
   // every visit to re-scrape KBO + re-hit NBB + re-run PDF extraction
   // for companies whose extraction had produced 0 statements (failed,
   // abbreviated, etc.). The user has `?refresh=true` for forced re-runs.
-  if (repo !== null && !refresh && cbe !== null) {
+  if (repo !== null && !refresh && cacheId !== null) {
     try {
-      const cached = await repo.getReport(cbe);
+      const cached = await repo.getReport(cacheId);
       if (cached) {
         return ok({
           query: q,
@@ -52,15 +65,19 @@ export async function GET(req: NextRequest): Promise<Response> {
         });
       }
     } catch (err) {
-      console.warn(`Cache read failed for ${cbe}:`, err);
+      console.warn(`Cache read failed for ${cacheId}:`, err);
     }
   }
 
-  // 2. Run pipeline
+  // 2. Run pipeline (dispatches BE → KBO/NBB, FR → INPI by `country`).
   let report;
   try {
     const pipeline = new EnrichmentPipeline();
-    report = await pipeline.run(q, { filingsToRead: filings, postalCode });
+    report = await pipeline.run(q, {
+      filingsToRead: filings,
+      postalCode,
+      country,
+    });
   } catch (err) {
     return errorResponse(err);
   }

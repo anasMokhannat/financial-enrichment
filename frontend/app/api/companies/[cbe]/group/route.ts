@@ -18,8 +18,8 @@
 
 import type { NextRequest } from "next/server";
 
+import { tryNormaliseAnyId } from "@/lib/server/companyId";
 import { EnrichmentRepository } from "@/lib/server/db/repository";
-import { tryNormalise } from "@/lib/server/enterpriseNumber";
 import { errorResponse, fail, ok } from "@/lib/server/http";
 import { createLogger } from "@/lib/server/log";
 
@@ -33,9 +33,9 @@ export async function GET(
   context: { params: Promise<{ cbe: string }> },
 ): Promise<Response> {
   const { cbe } = await context.params;
-  const cbeNorm = tryNormalise(cbe);
+  const cbeNorm = tryNormaliseAnyId(cbe);
   if (cbeNorm === null) {
-    return fail(400, `Not a valid CBE: ${JSON.stringify(cbe)}`);
+    return fail(400, `Not a valid CBE or SIREN: ${JSON.stringify(cbe)}`);
   }
 
   const repo = EnrichmentRepository.create();

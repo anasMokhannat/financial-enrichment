@@ -8,6 +8,7 @@
  * disk (extraction/xbrl.ts) but no longer wired into the pipeline.
  */
 
+import { FrenchPipeline } from "./inpi/pipeline";
 import { KBOScraper } from "./kbo/scraper";
 import { NBBClient } from "./nbb/client";
 import { NoFilingsError } from "./errors";
@@ -16,6 +17,7 @@ import { createLogger } from "./log";
 import {
   type Company,
   type CompanyFinancialReport,
+  type Country,
   type FinancialStatement,
 } from "./models";
 
@@ -29,8 +31,15 @@ export type PipelineOptions = {
   /**
    * 4-digit Belgian postcode. Narrows KBO name-search results; ignored
    * when `query` is already a CBE (direct number lookup is unique).
+   * Only applicable to Belgium.
    */
   postalCode?: string;
+  /**
+   * Which registry to query. Defaults to "BE" (KBO + NBB). "FR" routes
+   * the query through INPI instead — the extracted FinancialStatement
+   * shape is identical so the rest of the app doesn't care.
+   */
+  country?: Country;
 };
 
 const DEFAULT_FILINGS_TO_READ = 3;
@@ -49,6 +58,18 @@ export class EnrichmentPipeline {
   ): Promise<CompanyFinancialReport> {
     const notify = opts?.onProgress ?? (() => {});
     const nFilings = opts?.filingsToRead ?? DEFAULT_FILINGS_TO_READ;
+    const country: Country = opts?.country ?? "BE";
+
+    // France → INPI pipeline. Same return shape, so the rest of the
+    // app (caching, scoring, analyzer, UI) is country-agnostic.
+    if (country === "FR") {
+      log.info("dispatch FR", { query, filings: nFilings });
+      const french = new FrenchPipeline();
+      return french.run(query, {
+        filingsToRead: nFilings,
+        onProgress: notify,
+      });
+    }
 
     log.info("run start", { query, filings: nFilings });
     const startTotal = performance.now();

@@ -10,11 +10,11 @@
  * failed at extraction time — Refresh the company to retry).
  */
 
+import { tryNormaliseAnyId } from "@/lib/server/companyId";
 import {
   DocumentRepository,
   EnrichmentRepository,
 } from "@/lib/server/db/repository";
-import { tryNormalise } from "@/lib/server/enterpriseNumber";
 import { fail, ok } from "@/lib/server/http";
 
 const SIGNED_URL_TTL_SECONDS = 3600;
@@ -24,9 +24,9 @@ export async function GET(
   context: { params: Promise<{ cbe: string; ref: string }> },
 ): Promise<Response> {
   const { cbe, ref } = await context.params;
-  const cbeNorm = tryNormalise(cbe);
+  const cbeNorm = tryNormaliseAnyId(cbe);
   if (cbeNorm === null) {
-    return fail(400, `Not a valid CBE: ${JSON.stringify(cbe)}`);
+    return fail(400, `Not a valid CBE or SIREN: ${JSON.stringify(cbe)}`);
   }
   const reference = ref.trim();
   if (!reference) {

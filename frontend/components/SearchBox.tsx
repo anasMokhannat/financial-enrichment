@@ -8,6 +8,8 @@ type Props = {
   onChange: (v: string) => void;
   postalCode: string;
   onPostalCodeChange: (v: string) => void;
+  /** Hide the postcode input — only meaningful for Belgium / KBO. */
+  showPostalCode?: boolean;
   onSubmit: () => void;
   isLoading: boolean;
   placeholder?: string;
@@ -18,6 +20,7 @@ export function SearchBox({
   onChange,
   postalCode,
   onPostalCodeChange,
+  showPostalCode = true,
   onSubmit,
   isLoading,
   placeholder = "Company name or 10-digit enterprise number…",
@@ -43,22 +46,24 @@ export function SearchBox({
         />
       </div>
 
-      <div className="flex h-10 items-center gap-2 rounded-md border border-surface-line bg-surface px-3 transition focus-within:border-brand-300 sm:w-36">
-        <MapPin className="h-4 w-4 text-ink-muted" aria-hidden />
-        <input
-          type="text"
-          inputMode="numeric"
-          pattern="[0-9]*"
-          maxLength={4}
-          value={postalCode}
-          onChange={(e) =>
-            onPostalCodeChange(e.target.value.replace(/\D/g, "").slice(0, 4))
-          }
-          placeholder="Postcode"
-          aria-label="Postal code (4 digits)"
-          className="w-full bg-transparent text-sm text-ink outline-none placeholder:text-ink-muted"
-        />
-      </div>
+      {showPostalCode && (
+        <div className="flex h-10 items-center gap-2 rounded-md border border-surface-line bg-surface px-3 transition focus-within:border-brand-300 sm:w-36">
+          <MapPin className="h-4 w-4 text-ink-muted" aria-hidden />
+          <input
+            type="text"
+            inputMode="numeric"
+            pattern="[0-9]*"
+            maxLength={4}
+            value={postalCode}
+            onChange={(e) =>
+              onPostalCodeChange(e.target.value.replace(/\D/g, "").slice(0, 4))
+            }
+            placeholder="Postcode"
+            aria-label="Postal code (4 digits)"
+            className="w-full bg-transparent text-sm text-ink outline-none placeholder:text-ink-muted"
+          />
+        </div>
+      )}
 
       <button
         type="submit"
