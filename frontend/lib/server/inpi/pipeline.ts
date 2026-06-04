@@ -24,7 +24,14 @@ import {
 import { formatSiren, tryNormaliseSiren } from "../siren";
 
 import { bilanToFinancialStatement } from "./cerfa";
-import { InpiClient, InpiError, InpiUnavailableError } from "./client";
+import {
+  type InpiBilanSaisi,
+  InpiClient,
+  InpiError,
+  InpiUnavailableError,
+} from "./client";
+
+type Identite = InpiBilanSaisi["identite"];
 
 const log = createLogger("pipeline:fr");
 
@@ -109,7 +116,7 @@ export class FrenchPipeline {
     notify(`Fetching ${saisis.length} structured filing(s) from INPI`);
     const refs: FilingReference[] = [];
     const statements: FinancialStatement[] = [];
-    let identite: NonNullable<typeof identiteSeed> = identiteSeed;
+    let identite: Identite = identiteSeed;
     const docs = DocumentRepository.create();
 
     for (let i = 0; i < saisis.length; i++) {
@@ -228,8 +235,11 @@ export class FrenchPipeline {
 }
 
 // Sentinel for "no identite captured yet". Strict-equality compared
-// against later assignments above.
-const identiteSeed = {
+// against later assignments above. Typed at the full Identite shape so
+// reassigning the real bilan.identite (which has wider field types)
+// compiles cleanly — `as const` would narrow every property to its
+// literal type and break the assignment.
+const identiteSeed: Identite = {
   siren: "",
   dateClotureExercice: null,
   codeGreffe: null,
@@ -248,11 +258,11 @@ const identiteSeed = {
   infoTraitement: null,
   denomination: null,
   adresse: null,
-} as const;
+};
 
 function buildCompany(
   siren: string,
-  identite: typeof identiteSeed,
+  identite: Identite,
   pdfRef: { denomination?: string | null } | undefined,
 ): Company {
   const name =
