@@ -21,6 +21,7 @@ import {
   FilingReference,
   type FinancialStatement,
 } from "../models";
+import { searchByName as rechercheByName } from "../recherche/client";
 import { formatSiren, tryNormaliseSiren } from "../siren";
 
 import { bilanToFinancialStatement } from "./cerfa";
@@ -63,15 +64,18 @@ export class FrenchPipeline {
     const limit = opts?.filingsToRead ?? DEFAULT_FILINGS;
 
     // Accept either a direct SIREN/SIRET or a free-text company name.
-    // For names we hit /api/companies?companyName=... and resolve to
-    // a single SIREN — falling through to the existing flow.
+    // Names go through the free public recherche-entreprises API to
+    // resolve to a SIREN; from there the existing INPI-auth flow runs
+    // the bilans fetch. The two services are complementary —
+    // recherche-entreprises is great at search but has no annual-
+    // accounts data; INPI has the accounts but a weaker name search.
     const trimmed = query.trim();
     let siren = tryNormaliseSiren(trimmed);
     if (siren === null) {
-      notify(`Searching INPI by name: ${JSON.stringify(trimmed)}`);
+      notify(`Searching by name: ${JSON.stringify(trimmed)}`);
       siren = await this.resolveByName(trimmed);
     }
-    notify(`Resolving SIREN ${formatSiren(siren)} via INPI`);
+    notify(`Fetching annual accounts for SIREN ${formatSiren(siren)} from INPI`);
     log.info("run start", { siren, filings: limit });
     const t0 = performance.now();
 
@@ -200,6 +204,12 @@ export class FrenchPipeline {
    * shape so the rest of the pipeline doesn't need to know whether
    * the input was a SIREN or a name.
    *
+   * Uses the free public `recherche-entreprises.api.gouv.fr` for
+   * the search (no auth, far better-documented response shape than
+   * INPI's `companyName` filter). The resolved SIREN then goes back
+   * through the INPI-auth-gated bilans endpoint for the financial
+   * data — those two services are complementary.
+   *
    * Resolution rules, in order:
    *   - 0 results               → InpiError(404, "no match")
    *   - 1 result                → use it
@@ -211,9 +221,9 @@ export class FrenchPipeline {
    * for Belgian name disambiguation.
    */
   private async resolveByName(name: string): Promise<string> {
-    const candidates = await this.inpi.searchByName(name);
+    const candidates = await rechercheByName(name);
     if (candidates.length === 0) {
-      throw new InpiError(404, `No INPI match for ${JSON.stringify(name)}.`);
+      throw new InpiError(404, `No match for ${JSON.stringify(name)}.`);
     }
     if (candidates.length === 1) return candidates[0].siren;
 
@@ -229,7 +239,7 @@ export class FrenchPipeline {
         name: c.denomination,
         address: c.address,
       })),
-      `${candidates.length} INPI matches for ${JSON.stringify(name)}; refine the query.`,
+      `${candidates.length} matches for ${JSON.stringify(name)}; refine the query.`,
     );
   }
 }

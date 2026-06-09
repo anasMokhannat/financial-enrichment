@@ -29,9 +29,9 @@ import OpenAI from "openai";
 // fixture in production). Importing the lib file skips that block.
 import pdfParse from "pdf-parse/lib/pdf-parse.js";
 
-import { env, hasOpenAI } from "../config";
 import { DocumentRepository } from "../db/repository";
 import { FinancialExtractionError } from "../errors";
+import { createLlmClient, type LlmClient } from "../llm";
 import { createLogger } from "../log";
 import {
   fiscalYear,
@@ -185,24 +185,21 @@ export type ExtractResult = {
 export class PdfExtractor {
   private readonly client: OpenAI;
   private readonly model: string;
+  private readonly provider: LlmClient["provider"];
 
   constructor(
     private readonly nbb: NBBClient,
-    opts?: { apiKey?: string; model?: string },
+    opts?: { llm?: LlmClient },
   ) {
-    const apiKey = opts?.apiKey ?? env.openai.apiKey;
-    if (!apiKey) {
+    const llm = opts?.llm ?? createLlmClient();
+    if (llm === null) {
       throw new FinancialExtractionError(
-        "OPENAI_API_KEY is not set; the PDF extractor requires OpenAI.",
+        "No LLM provider configured. Set OPENROUTER_API_KEY or OPENAI_API_KEY.",
       );
     }
-    if (!hasOpenAI()) {
-      throw new FinancialExtractionError(
-        "OpenAI is not configured (OPENAI_API_KEY missing).",
-      );
-    }
-    this.client = new OpenAI({ apiKey });
-    this.model = opts?.model ?? env.openai.model;
+    this.client = llm.client;
+    this.model = llm.model;
+    this.provider = llm.provider;
   }
 
   async extract(
@@ -289,6 +286,8 @@ export class PdfExtractor {
     const filled = Object.values(payload).filter((v) => v !== null).length;
     log.info("statement extracted", {
       reference: ref.reference,
+      provider: this.provider,
+      model: this.model,
       filled,
       total: 14,
       revenue: payload.revenue,

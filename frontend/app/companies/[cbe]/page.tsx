@@ -1,6 +1,5 @@
 import { notFound } from "next/navigation";
 
-import { AbilityToPayCard } from "@/components/AbilityToPayCard";
 import { CommercialAnalysisPanel } from "@/components/CommercialAnalysisPanel";
 import { CompanyHeader } from "@/components/CompanyHeader";
 import { CompanyReport } from "@/components/CompanyReport";
@@ -86,8 +85,6 @@ export default async function CompanyPage({
   return (
     <div className="mx-auto flex max-w-7xl flex-col gap-4">
       <CompanyHeader report={report} />
-
-      <AbilityToPayCard report={report} />
 
       <CommercialAnalysisPanel cbe={company.enterprise_number} />
 

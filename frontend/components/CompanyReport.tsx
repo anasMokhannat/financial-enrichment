@@ -1,14 +1,6 @@
 "use client";
 
-import {
-  Banknote,
-  Coins,
-  FileSearch,
-  Landmark,
-  Receipt,
-  TrendingUp,
-  Users,
-} from "lucide-react";
+import { FileSearch } from "lucide-react";
 import { useState } from "react";
 
 import { LiquidityChart } from "@/components/charts/LiquidityChart";
@@ -16,23 +8,8 @@ import { LegalProfile } from "@/components/LegalProfile";
 import { RatiosRow } from "@/components/RatiosRow";
 import { Tabs } from "@/components/Tabs";
 import { ViewPdfButton } from "@/components/ViewPdfButton";
-import { cn } from "@/lib/cn";
 import { fmtEUR } from "@/lib/ratios";
 import type { CompanyFinancialReport, FinancialStatement } from "@/lib/types";
-
-type MetricAccent = "cyan" | "emerald" | "indigo" | "violet" | "blue" | "rose";
-
-const METRIC_ACCENT: Record<
-  MetricAccent,
-  { bg: string; fg: string }
-> = {
-  cyan: { bg: "bg-brand-50", fg: "text-brand-700" },
-  emerald: { bg: "bg-accent-profit-50", fg: "text-accent-profit-700" },
-  indigo: { bg: "bg-indigo-50", fg: "text-indigo-700" },
-  violet: { bg: "bg-accent-equity-50", fg: "text-accent-equity-700" },
-  blue: { bg: "bg-accent-cash-50", fg: "text-accent-cash-700" },
-  rose: { bg: "bg-accent-people-50", fg: "text-accent-people-700" },
-};
 
 type Props = {
   report: CompanyFinancialReport;
@@ -72,18 +49,16 @@ export function CompanyReport({ report }: Props) {
 
   return (
     <>
-      <section className="rounded-card border border-surface-line bg-surface px-5 py-4">
-        <header className="mb-4 flex flex-wrap items-center justify-between gap-3">
-          <h2 className="text-lg font-semibold text-ink">
-            Key metrics
-          </h2>
-          <div className="flex flex-wrap items-center gap-3">
-            <label className="flex items-center gap-2 text-sm text-ink-subtle">
-              <span>Fiscal year</span>
+      <section className="rounded-card border border-surface-line bg-surface px-4 py-3">
+        <header className="mb-2 flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-sm font-semibold text-ink">Key metrics</h2>
+          <div className="flex flex-wrap items-center gap-2">
+            <label className="flex items-center gap-1.5 text-xs text-ink-subtle">
+              <span>FY</span>
               <select
                 value={selectedIdx}
                 onChange={(e) => setSelectedIdx(Number(e.target.value))}
-                className="rounded-lg border border-surface-line bg-surface px-3 py-1.5 text-sm font-medium text-ink outline-none transition focus:border-brand-300"
+                className="h-7 rounded-md border border-surface-line bg-surface px-2 text-xs font-medium text-ink outline-none transition focus:border-brand-300"
               >
                 {sorted.map((s, i) => (
                   <option key={s.reference} value={i}>
@@ -99,55 +74,17 @@ export function CompanyReport({ report }: Props) {
           </div>
         </header>
 
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-6">
-          <Metric
-            accent="cyan"
-            icon={TrendingUp}
-            label="Revenue"
-            value={fmtEUR(current.revenue)}
-          />
-          <Metric
-            accent="emerald"
-            icon={Banknote}
-            label="Net profit"
-            value={fmtEUR(current.net_profit)}
-          />
-          <Metric
-            accent="indigo"
-            icon={Landmark}
-            label="Total assets"
-            value={fmtEUR(current.total_assets)}
-          />
-          <Metric
-            accent="violet"
-            icon={Coins}
-            label="Equity"
-            value={fmtEUR(current.total_equity)}
-          />
-          <Metric
-            accent="blue"
-            icon={Receipt}
-            label="Cash"
-            value={fmtEUR(current.cash_and_equivalents)}
-          />
-          <Metric
-            accent="rose"
-            icon={Users}
-            label="Employees"
-            value={
-              current.employees_fte
-                ? Number(current.employees_fte).toLocaleString("en-US")
-                : "—"
-            }
-          />
+        {/* Six tiles in one card — first row: deal-size + cash. Second
+            row: trend signals (momentum / profitability / leverage).
+            One bordered wrapper instead of two = far less wasted space. */}
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+          <Metric label="Revenue" value={fmtEUR(current.revenue)} />
+          <Metric label="Net profit" value={fmtEUR(current.net_profit)} />
+          <Metric label="Cash" value={fmtEUR(current.cash_and_equivalents)} />
         </div>
-      </section>
-
-      <section className="rounded-card border border-surface-line bg-surface px-5 py-4">
-        <h2 className="mb-4 text-lg font-semibold text-ink">
-          Financial ratios
-        </h2>
-        <RatiosRow current={current} previous={previous} />
+        <div className="mt-2">
+          <RatiosRow current={current} previous={previous} />
+        </div>
       </section>
 
       <section className="rounded-card border border-surface-line bg-surface px-5 py-4">
@@ -191,31 +128,13 @@ function EmptyStatementsCard({ hasFilings }: { hasFilings: boolean }) {
   );
 }
 
-function Metric({
-  accent,
-  icon: Icon,
-  label,
-  value,
-}: {
-  accent: MetricAccent;
-  icon: React.ElementType;
-  label: string;
-  value: string;
-}) {
-  const palette = METRIC_ACCENT[accent];
+function Metric({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-xl border border-surface-line bg-surface px-3 py-3 transition hover:border-brand-200 hover:shadow-card">
-      <div className="flex items-center gap-2">
-        <span
-          className={cn("grid h-6 w-6 place-items-center rounded-lg", palette.bg)}
-        >
-          <Icon className={cn("h-3.5 w-3.5", palette.fg)} />
-        </span>
-        <span className="text-[10px] font-semibold uppercase tracking-wider text-ink-muted">
-          {label}
-        </span>
-      </div>
-      <div className="mt-2 text-xl font-bold text-ink">{value}</div>
+    <div className="flex items-baseline justify-between gap-2 rounded-md border border-surface-line bg-surface px-2.5 py-1.5">
+      <span className="text-[11px] text-ink-muted">{label}</span>
+      <span className="text-sm font-semibold tabular-nums text-ink">
+        {value}
+      </span>
     </div>
   );
 }

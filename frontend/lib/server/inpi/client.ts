@@ -116,13 +116,6 @@ export type InpiAttachments = {
   bilansSaisis: InpiBilanRef[];
 };
 
-/** Pared-down search result. The raw /api/companies response is a
- *  deeply-nested formality tree; this is what we surface. */
-export type InpiCandidate = {
-  siren: string;
-  denomination: string;
-  address: string | null;
-};
 
 // ── Client ───────────────────────────────────────────────────────────────
 
@@ -192,32 +185,6 @@ export class InpiClient {
     return this.authedJson<InpiAttachments>(path);
   }
 
-  /**
-   * Search companies by free-text name.
-   *
-   * Endpoint: `GET /api/companies?companyName=...` (verified in INPI's
-   * "API formalités" technical documentation v3, not in the comptes-
-   * annuels v5 doc). Returns the formality tree for each match; we
-   * parse defensively because the tree shape differs between
-   * personnes morales (legal entities) and physiques (sole traders).
-   *
-   * Caps the response at `pageSize` (default 25 — enough for the UI
-   * to render a candidates list without overwhelming the dropdown).
-   */
-  async searchByName(
-    name: string,
-    opts?: { pageSize?: number },
-  ): Promise<InpiCandidate[]> {
-    const pageSize = Math.min(Math.max(opts?.pageSize ?? 25, 1), 100);
-    const params = new URLSearchParams({
-      companyName: name,
-      pageSize: String(pageSize),
-    });
-    const raw = await this.authedJson<unknown>(
-      `/api/companies?${params.toString()}`,
-    );
-    return parseSearchResponse(raw);
-  }
 
   async getBilanSaisi(id: string): Promise<InpiBilanSaisiResponse> {
     const path = `/api/bilans-saisis/${encodeURIComponent(id)}`;
@@ -281,118 +248,3 @@ export class InpiClient {
   }
 }
 
-// ── /api/companies response parser ───────────────────────────────────────
-
-/**
- * INPI's company-search response is a deeply nested formality tree
- * whose exact shape differs between legal entities (personneMorale)
- * and sole traders (personnePhysique). Some envelopes wrap the array
- * under `data` / `results`; others return a bare array. This parser
- * tolerates all known shapes — extract a flat siren + denomination
- * + address per result and drop anything we can't parse.
- */
-function parseSearchResponse(raw: unknown): InpiCandidate[] {
-  const items = unwrapArray(raw);
-  const candidates: InpiCandidate[] = [];
-  for (const item of items) {
-    const parsed = extractCandidate(item);
-    if (parsed !== null) candidates.push(parsed);
-  }
-  return candidates;
-}
-
-function unwrapArray(raw: unknown): unknown[] {
-  if (Array.isArray(raw)) return raw;
-  if (raw && typeof raw === "object") {
-    const obj = raw as Record<string, unknown>;
-    for (const key of ["data", "results", "items", "companies"]) {
-      const v = obj[key];
-      if (Array.isArray(v)) return v;
-    }
-  }
-  return [];
-}
-
-function extractCandidate(item: unknown): InpiCandidate | null {
-  if (!item || typeof item !== "object") return null;
-  const obj = item as Record<string, unknown>;
-
-  const siren = pickSiren(obj);
-  if (!siren) return null;
-
-  const denomination = pickDenomination(obj);
-  if (!denomination) return null;
-
-  const address = pickAddress(obj);
-
-  return { siren, denomination, address };
-}
-
-function pickSiren(obj: Record<string, unknown>): string | null {
-  const candidates = [
-    obj.siren,
-    pick(obj, "formality.content.personneMorale.identite.entreprise.siren"),
-    pick(obj, "formality.content.personneMorale.siren"),
-    pick(obj, "formality.content.personnePhysique.identite.entrepreneur.siren"),
-    pick(obj, "formality.content.personnePhysique.siren"),
-    pick(obj, "formality.siren"),
-  ];
-  for (const c of candidates) {
-    if (typeof c === "string" && /^\d{9}$/.test(c)) return c;
-  }
-  return null;
-}
-
-function pickDenomination(obj: Record<string, unknown>): string | null {
-  // Legal-entity path is canonical; sole-trader entries fall back to
-  // surname + given name composition.
-  const direct =
-    pick(obj, "formality.content.personneMorale.identite.entreprise.denomination") ??
-    pick(obj, "formality.content.personneMorale.denomination") ??
-    pick(obj, "denomination");
-  if (typeof direct === "string" && direct.trim()) return direct.trim();
-
-  // Sole trader (personne physique): build "FIRSTNAME LASTNAME".
-  const nom =
-    pick(obj, "formality.content.personnePhysique.identite.entrepreneur.descriptionPersonne.nom") ??
-    pick(obj, "formality.content.personnePhysique.identite.descriptionPersonne.nom");
-  const prenoms =
-    pick(obj, "formality.content.personnePhysique.identite.entrepreneur.descriptionPersonne.prenoms") ??
-    pick(obj, "formality.content.personnePhysique.identite.descriptionPersonne.prenoms");
-  const parts: string[] = [];
-  if (Array.isArray(prenoms) && prenoms.length > 0) {
-    parts.push(String(prenoms[0]));
-  } else if (typeof prenoms === "string") {
-    parts.push(prenoms);
-  }
-  if (typeof nom === "string") parts.push(nom);
-  if (parts.length > 0) return parts.join(" ").trim();
-  return null;
-}
-
-function pickAddress(obj: Record<string, unknown>): string | null {
-  const root =
-    pick(obj, "formality.content.personneMorale.adresseEntreprise.adresse") ??
-    pick(obj, "formality.content.personnePhysique.adresseEntreprise.adresse");
-  if (!root || typeof root !== "object") return null;
-  const a = root as Record<string, unknown>;
-  const street = [a.numVoie, a.typeVoie, a.voie]
-    .filter((v) => typeof v === "string" && v)
-    .join(" ");
-  const cityLine = [a.codePostal, a.commune]
-    .filter((v) => typeof v === "string" && v)
-    .join(" ");
-  const out = [street, cityLine].filter((s) => s).join(", ");
-  return out || null;
-}
-
-/** Tiny `obj.path.to.thing` reader — returns undefined on any missing
- *  hop rather than throwing. Keeps parseSearchResponse compact. */
-function pick(obj: Record<string, unknown>, path: string): unknown {
-  let cur: unknown = obj;
-  for (const seg of path.split(".")) {
-    if (!cur || typeof cur !== "object") return undefined;
-    cur = (cur as Record<string, unknown>)[seg];
-  }
-  return cur;
-}

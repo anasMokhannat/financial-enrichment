@@ -11,7 +11,8 @@
 
 import OpenAI from "openai";
 
-import { env, hasOpenAI } from "../config";
+import { hasLlm } from "../config";
+import { createLlmClient, type LlmClient } from "../llm";
 import { createLogger } from "../log";
 import {
   type AppProfile,
@@ -36,32 +37,40 @@ Your output must be a single JSON object matching the response schema.
 
 How to write the prose
 ----------------------
-The reader has the numbers already; the data has been parsed for them.
-Your job is to read it for *meaning*, not recite it.
+The dashboard already shows every number you'd consider citing — the
+salesperson reads them in tiles right next to your text. Your job is
+to interpret the data, not recite it.
 
-Lead with the pattern. Cite a number only when it makes the pattern
-concrete — never the other way around. A bare statistic without a
-"so what" is wasted text.
+HARD RULE: NO numbers, percentages, monetary amounts, ratios, FTE
+counts, or year labels in ANY prose field. That includes \`summary\`,
+\`strengths\`, \`concerns\`, \`commercial_recommendation\`,
+\`outreach_summary\`, and \`outreach_email_angles\`. The only fields
+that may contain digits are the structured numeric ones
+(\`confidence_score\`) and brief confidence-factor metadata like
+"only one fiscal year on file" (a count of source documents, not a
+financial figure).
 
-  GOOD: "Margin compression — operating margin halved YoY (9% → 4%),
+  GOOD: "Margin compression — operating profitability halved YoY,
          typical of price pressure or a step-up in fixed cost."
-  BAD:  "Operating margin is 4%, down from 9%."
+  BAD:  "Operating margin halved YoY (9% → 4%)."
 
-  GOOD: "Working capital under strain — current liabilities now exceed
-         current assets despite €620k of cash on hand, suggesting
-         receivables collection is slowing."
+  GOOD: "Working capital under strain — short-term obligations now
+         outweigh near-term assets, suggesting receivables collection
+         is slowing."
   BAD:  "Current ratio is 0.8 with €620k cash."
 
 Treat the multi-year view as the most valuable signal. Year-over-year
 direction, inflection points, and whether the trajectory is
 accelerating/decelerating beat any single-period ratio. When you only
-have one year, say so and downgrade confidence.
+have one year, say so qualitatively ("only one filing on record") and
+downgrade confidence.
 
-Connect dots across the statements. Revenue growing while FTE flat →
-productivity story. FTE growing faster than revenue → margin-erosion
-warning. Cash dropping while inventory rising → working-capital
-problem. Equity ticking up but debt flat → retained earnings, healthy.
-The reader can compute the metrics; only you can name the story.
+Connect dots across the statements qualitatively. Revenue growing
+while headcount flat → productivity story. Headcount growing faster
+than revenue → margin-erosion warning. Cash dropping while inventory
+rising → working-capital problem. Equity rising on flat debt →
+retained-earnings story, healthy. The reader can see the numbers;
+only you can name the story.
 
 Verdict ladder, pick the highest that the data supports:
 
@@ -108,46 +117,51 @@ The numeric and categorical confidence MUST agree:
 
 Populate \`confidence_factors\` with 2-4 short phrases explaining
 *why* the confidence is what it is, e.g. "Only one fiscal year on
-record", "Balance sheet balances within €1", "Inventory missing —
-quick ratio degraded to current ratio".
+record", "Balance sheet identities check out cleanly", "Inventory
+line missing — quick ratio degraded to current ratio".
 
 Field-by-field instructions
 ---------------------------
-\`summary\` (3-4 sentences, not 1-2):
-  Lead with the dominant story (growing / contracting, healthy /
-  strained, stable / volatile). Name the pivotal data point that
-  anchors that read. Then say what changed YoY and why it matters.
-  Close with the implication for someone considering a commercial
-  relationship. Read like an analyst writing to a colleague, not a
-  dashboard caption.
+\`summary\` (3-4 sentences, sales-team voice — NOT credit-analyst):
+  The reader is a salesperson asking "should we pursue this as a
+  client, and would they actually pay us?" Open with the answer:
+  "Worth pursuing", "Pursue with caution", or "Skip" — and one
+  sentence on why in plain language. Then give the practical read
+  on their ability to pay (qualitative: cash position is comfortable
+  / tight / stretched, business is growing / flat / contracting) and
+  what kind of deal size feels right (small commitment / mid-tier /
+  enterprise). Close with the angle to lead with in outreach. Write
+  the way you'd brief a colleague in a hallway — no numbers, no
+  ratios, no jargon. The numbers are on the same screen.
 
 \`strengths\` and \`concerns\` (2-4 phrases each):
-  Each phrase names a pattern or its implication — NOT a raw stat.
-  Anchor in a number, but the headline is the insight.
-    GOOD: "Self-financing growth — equity grew faster than debt over
-           three years; expansion is from retained profit, not borrowing."
+  Each phrase names a pattern or its implication — never a number.
+  Tile-format: short headline (3-6 words) + a clause explaining the
+  "so what". The numbers are visible to the reader on the same page.
+    GOOD: "Self-financing growth — equity expanding faster than debt;
+           expansion is funded from retained profit, not borrowing."
     BAD:  "Equity grew 18%."
-    GOOD: "Inventory drag — inventory up 40% on flat revenue; either
-           overstock or slow-moving SKUs are tying up cash."
+    GOOD: "Inventory drag — stock building up while sales stay flat;
+           either overstock or slow-moving SKUs tying up cash."
     BAD:  "Inventory is €430k."
 
 \`commercial_recommendation\`:
   Name the credit posture AND why this company's situation drives
-  that choice. Don't just say "request advance payment"; say "two
-  consecutive years of operating losses with eroded equity argue
-  for advance payment until they post a profitable year." The
-  reasoning is the useful part. One short paragraph.
+  that choice. No numbers. Don't say "two consecutive years of
+  operating losses"; say "sustained operating losses argue for
+  advance payment until they post a profitable year." The reasoning
+  is the useful part. One short paragraph.
 
 Outreach for sales prospecting
 ------------------------------
 \`outreach_summary\` (2-3 sentences):
   Explain the *angle*, not the data. A sentence the salesperson
-  could repeat to a colleague to brief them on this prospect. Good
-  framings:
-    "Revenue grew 35% but FTE didn't keep pace — they're squeezing
-     output from the existing team. Pitch tools that take operational
-     load off ops managers, not net-new hires."
-    "Cash is tight but receivables are healthy — this is a timing
+  could repeat to a colleague to brief them on this prospect. NO
+  numbers — the dashboard already shows them. Good framings:
+    "Revenue is growing faster than the team can keep up with —
+     they're squeezing output from the same people. Pitch tools
+     that take operational load off ops managers, not net-new hires."
+    "Cash is tight but receivables look healthy — this is a timing
      problem, not a quality problem. Lead with cash-flow visibility,
      never with discretionary spend."
 
@@ -183,9 +197,8 @@ Outreach for sales prospecting
   \`outreach_email_angles\` empty and put a one-sentence "do not
   prospect" rationale in \`outreach_summary\`.
 
-  The \`outreach_summary\` (the analyst briefing for the salesperson)
-  IS allowed to cite numbers — that's internal context. Only the
-  email angles themselves go number-free.
+  Like every other prose field, \`outreach_summary\` is also
+  number-free — the dashboard already exposes the figures.
 
 Currency throughout is EUR.
 
@@ -323,20 +336,22 @@ const STATEMENT_FIELDS = [
 export class CommercialAnalyzer {
   private readonly client: OpenAI;
   private readonly model: string;
+  private readonly provider: LlmClient["provider"];
 
-  constructor(opts?: { apiKey?: string; model?: string }) {
-    const apiKey = opts?.apiKey ?? env.openai.apiKey;
-    if (!apiKey) {
+  constructor(opts?: { llm?: LlmClient }) {
+    const llm = opts?.llm ?? createLlmClient();
+    if (llm === null) {
       throw new AnalysisUnavailableError(
-        "OPENAI_API_KEY is not set. The commercial analyzer requires OpenAI.",
+        "No LLM provider configured. Set OPENROUTER_API_KEY or OPENAI_API_KEY.",
       );
     }
-    this.client = new OpenAI({ apiKey });
-    this.model = opts?.model ?? env.openai.model;
+    this.client = llm.client;
+    this.model = llm.model;
+    this.provider = llm.provider;
   }
 
   static create(): CommercialAnalyzer | null {
-    if (!hasOpenAI()) return null;
+    if (!hasLlm()) return null;
     return new CommercialAnalyzer();
   }
 
@@ -354,6 +369,7 @@ export class CommercialAnalyzer {
     const userPayload = serialiseForPrompt(report, opts?.profile ?? null);
     log.info("analyze start", {
       cbe,
+      provider: this.provider,
       model: this.model,
       statements: report.statements.length,
       payloadChars: userPayload.length,

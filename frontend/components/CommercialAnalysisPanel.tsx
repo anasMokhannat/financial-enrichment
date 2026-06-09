@@ -30,10 +30,17 @@ type State =
   | { kind: "error"; message: string };
 
 /**
- * AI-generated commercial-fit assessment for a company. Shows a
- * verdict badge, an executive summary, strength + concern lists, and
- * a concrete commercial recommendation. Cached server-side; a
- * regenerate button re-runs the analyzer.
+ * Sales-first commercial assessment.
+ *
+ * Hero card on the company page: one go/no-go header (derived from
+ * verdict + ICP fit), the AI's plain-language summary, and outreach
+ * hooks ready to paste. Everything more granular (strengths, concerns,
+ * full recommendation, confidence factors) is folded into an
+ * expandable details block so the default view stays readable.
+ *
+ * The numeric panels live in the "Key metrics" card below — this
+ * card is deliberately number-free so the AI prose doesn't compete
+ * with the figures.
  */
 export function CommercialAnalysisPanel({ cbe }: { cbe: string }) {
   const [state, setState] = useState<State>({ kind: "idle" });
@@ -132,7 +139,9 @@ export function CommercialAnalysisPanel({ cbe }: { cbe: string }) {
     );
   }
 
-  return <LoadedAnalysis analysis={state.analysis} onRegenerate={generate} />;
+  return (
+    <LoadedAnalysis analysis={state.analysis} onRegenerate={generate} />
+  );
 }
 
 function LoadedAnalysis({
@@ -142,41 +151,44 @@ function LoadedAnalysis({
   analysis: CommercialAnalysis;
   onRegenerate: () => void;
 }) {
+  const decision = decisionFor(analysis.verdict, analysis.icp_fit);
   return (
     <Card>
       <header className="flex flex-wrap items-start justify-between gap-3">
-        <div className="flex flex-wrap items-center gap-2">
+        <ClientRecommendationBadge decision={decision} />
+        <GenerateButton onClick={onRegenerate} label="Regenerate" />
+      </header>
+
+      <p className="mt-3 text-base leading-relaxed text-ink">
+        {analysis.summary}
+      </p>
+
+      {analysis.outreach_email_angles.length > 0 && (
+        <OutreachSection
+          summary={analysis.outreach_summary}
+          angles={analysis.outreach_email_angles}
+        />
+      )}
+
+      <details className="mt-5 rounded-lg border border-surface-line bg-surface-sub/30 px-4 py-3 text-sm text-ink-subtle">
+        <summary className="cursor-pointer text-xs font-medium text-ink">
+          Full analysis · verdict, strengths, concerns
+        </summary>
+
+        <div className="mt-3 flex flex-wrap items-center gap-2">
           <VerdictBadge verdict={analysis.verdict} />
           <IcpFitBadge fit={analysis.icp_fit} />
-        </div>
-        <div className="flex items-center gap-3">
           <ConfidenceGauge
             score={analysis.confidence_score}
             label={analysis.confidence}
           />
-          <GenerateButton onClick={onRegenerate} label="Regenerate" />
         </div>
-      </header>
 
-      <p className="mt-3 text-xs text-ink-muted">
-        AI-generated
-        {analysis.generated_at && (
-          <span className="ml-1">
-            · {new Date(analysis.generated_at).toLocaleString()}
-          </span>
-        )}
-      </p>
-
-      <p className="mt-3 text-sm leading-relaxed text-ink">
-        {analysis.summary}
-      </p>
-
-      {analysis.icp_fit_reasons.length > 0 && (
-        <details className="mt-3 rounded-lg border border-surface-line bg-surface-sub/40 px-3 py-2 text-xs text-ink-subtle">
-          <summary className="cursor-pointer font-medium text-ink">
-            ICP fit · why
-          </summary>
-          <ul className="mt-2 space-y-1 pl-1">
+        {analysis.icp_fit_reasons.length > 0 && (
+          <ul className="mt-3 space-y-1 pl-1 text-xs">
+            <li className="text-[11px] font-semibold uppercase tracking-wider text-ink-muted">
+              ICP fit · why
+            </li>
             {analysis.icp_fit_reasons.map((reason, i) => (
               <li key={i} className="flex items-start gap-2">
                 <span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-ink-muted" />
@@ -184,15 +196,37 @@ function LoadedAnalysis({
               </li>
             ))}
           </ul>
-        </details>
-      )}
+        )}
 
-      {analysis.confidence_factors.length > 0 && (
-        <details className="mt-3 rounded-lg bg-surface-sub/70 px-3 py-2 text-xs text-ink-subtle ring-1 ring-surface-line">
-          <summary className="cursor-pointer font-medium text-ink">
-            Why this confidence?
-          </summary>
-          <ul className="mt-2 space-y-1 pl-1">
+        <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
+          <Column
+            title="Strengths"
+            tone="ok"
+            icon={TrendingUp}
+            items={analysis.strengths}
+          />
+          <Column
+            title="Concerns"
+            tone="warn"
+            icon={TrendingDown}
+            items={analysis.concerns}
+          />
+        </div>
+
+        <div className="mt-4 rounded-md border border-brand-100 bg-brand-50/40 px-3 py-2">
+          <div className="text-[11px] font-semibold uppercase tracking-wider text-brand-700">
+            Detailed recommendation
+          </div>
+          <p className="mt-1 text-xs text-ink">
+            {analysis.commercial_recommendation}
+          </p>
+        </div>
+
+        {analysis.confidence_factors.length > 0 && (
+          <ul className="mt-3 space-y-1 pl-1 text-xs">
+            <li className="text-[11px] font-semibold uppercase tracking-wider text-ink-muted">
+              Why this confidence
+            </li>
             {analysis.confidence_factors.map((reason, i) => (
               <li key={i} className="flex items-start gap-2">
                 <span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-ink-muted" />
@@ -200,39 +234,18 @@ function LoadedAnalysis({
               </li>
             ))}
           </ul>
-        </details>
-      )}
+        )}
+      </details>
 
-      <div className="mt-5 grid grid-cols-1 gap-4 md:grid-cols-2">
-        <Column
-          title="Strengths"
-          tone="ok"
-          icon={TrendingUp}
-          items={analysis.strengths}
-        />
-        <Column
-          title="Concerns"
-          tone="warn"
-          icon={TrendingDown}
-          items={analysis.concerns}
-        />
-      </div>
-
-      <div className="mt-5 rounded-xl bg-brand-50/70 px-4 py-3 ring-1 ring-brand-100">
-        <div className="text-[11px] font-semibold uppercase tracking-wider text-brand-700">
-          Recommendation
-        </div>
-        <p className="mt-1 text-sm text-ink">
-          {analysis.commercial_recommendation}
-        </p>
-      </div>
-
-      <OutreachSection
-        summary={analysis.outreach_summary}
-        angles={analysis.outreach_email_angles}
-      />
-
-      <footer className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-ink-muted">
+      <footer className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-1 text-[10px] text-ink-muted">
+        <span>
+          AI-generated
+          {analysis.generated_at && (
+            <span className="ml-1">
+              · {new Date(analysis.generated_at).toLocaleString()}
+            </span>
+          )}
+        </span>
         <span>
           Based on {analysis.based_on_filing_refs.length} filing
           {analysis.based_on_filing_refs.length === 1 ? "" : "s"}
@@ -535,6 +548,149 @@ function OutreachAngle({ text }: { text: string }) {
         )}
       </button>
     </li>
+  );
+}
+
+// ── Sales-first composition pieces ──────────────────────────────────────
+
+type ClientDecision = {
+  /** Display label shown on the badge — sales-team voice, not analyst. */
+  label: string;
+  /** One-line caption explaining the decision. */
+  caption: string;
+  tone: "go" | "caution" | "low" | "skip" | "unknown";
+};
+
+/**
+ * Combine the AI verdict (financial-health read) and the ICP fit
+ * (commercial-direction read) into a single go/no-go recommendation
+ * for the sales team. Sales doesn't want two badges — they want one
+ * answer.
+ *
+ * Matrix:
+ *   any            + verdict=avoid      → "Skip"
+ *   no_fit         + any verdict        → "Skip"
+ *   weak_fit       + strong/stable      → "Low priority"
+ *   weak_fit       + watch/risky        → "Skip"
+ *   strong/partial + strong/stable      → "Worth pursuing"
+ *   strong/partial + watch              → "Pursue with caution"
+ *   strong/partial + risky              → "Pursue with caution"
+ *   unknown ICP    → fall back to verdict alone
+ */
+function decisionFor(verdict: Verdict, fit: IcpFit): ClientDecision {
+  if (verdict === "avoid") {
+    return {
+      label: "Skip",
+      caption: "Financial distress — don't extend credit",
+      tone: "skip",
+    };
+  }
+  if (fit === "no_fit") {
+    return {
+      label: "Skip",
+      caption: "Outside your stated ICP",
+      tone: "skip",
+    };
+  }
+  if (fit === "weak_fit") {
+    if (verdict === "strong" || verdict === "stable") {
+      return {
+        label: "Low priority",
+        caption: "Loose ICP match, but financially safe",
+        tone: "low",
+      };
+    }
+    return {
+      label: "Skip",
+      caption: "Weak fit and financial concerns",
+      tone: "skip",
+    };
+  }
+  // strong_fit / partial_fit / unknown
+  if (verdict === "strong" || verdict === "stable") {
+    return {
+      label: "Worth pursuing",
+      caption:
+        fit === "strong_fit"
+          ? "Strong ICP match and financially healthy"
+          : fit === "partial_fit"
+          ? "Partial ICP match, financially healthy"
+          : "Financially healthy (ICP unset)",
+      tone: "go",
+    };
+  }
+  if (verdict === "watch" || verdict === "risky") {
+    return {
+      label: "Pursue with caution",
+      caption:
+        verdict === "watch"
+          ? "ICP looks right but watch for soft signals"
+          : "ICP looks right but credit terms need tightening",
+      tone: "caution",
+    };
+  }
+  return {
+    label: "Review",
+    caption: "Mixed signals — read the summary",
+    tone: "unknown",
+  };
+}
+
+const DECISION_STYLES: Record<
+  ClientDecision["tone"],
+  { bg: string; fg: string; ring: string; icon: React.ElementType }
+> = {
+  go: {
+    bg: "bg-emerald-50",
+    fg: "text-emerald-700",
+    ring: "ring-emerald-200",
+    icon: ShieldCheck,
+  },
+  caution: {
+    bg: "bg-amber-50",
+    fg: "text-amber-700",
+    ring: "ring-amber-200",
+    icon: AlertTriangle,
+  },
+  low: {
+    bg: "bg-surface-sub",
+    fg: "text-ink-subtle",
+    ring: "ring-surface-line",
+    icon: Shield,
+  },
+  skip: {
+    bg: "bg-rose-50",
+    fg: "text-rose-700",
+    ring: "ring-rose-200",
+    icon: ShieldX,
+  },
+  unknown: {
+    bg: "bg-surface-sub",
+    fg: "text-ink-subtle",
+    ring: "ring-surface-line",
+    icon: Sparkles,
+  },
+};
+
+function ClientRecommendationBadge({ decision }: { decision: ClientDecision }) {
+  const meta = DECISION_STYLES[decision.tone];
+  const Icon = meta.icon;
+  return (
+    <div
+      className={cn(
+        "inline-flex items-start gap-2.5 rounded-lg px-3 py-2 ring-1",
+        meta.bg,
+        meta.ring,
+      )}
+    >
+      <Icon className={cn("mt-0.5 h-4 w-4 shrink-0", meta.fg)} />
+      <div>
+        <div className={cn("text-sm font-semibold", meta.fg)}>
+          {decision.label}
+        </div>
+        <div className="text-[11px] text-ink-subtle">{decision.caption}</div>
+      </div>
+    </div>
   );
 }
 
